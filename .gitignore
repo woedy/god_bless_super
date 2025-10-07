@@ -37,9 +37,9 @@ local_settings.py
 db.sqlite3-journal
 media/
 staticfiles/
-static_cdn/static_root/
-static_cdn/media/*
-!static_cdn/media/defaults/
+**/static_cdn/static_root/
+**/static_cdn/media/*
+!**/static_cdn/media/defaults/
 # Keep god_bless_backend/db.sqlite3 but ignore other sqlite3 files
 *.sqlite3
 !god_bless_backend/db.sqlite3
