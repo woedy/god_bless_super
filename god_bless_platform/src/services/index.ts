@@ -13,13 +13,23 @@ export { authService, AuthService } from './auth'
 // Project Service
 export { projectService, ProjectService, ProjectValidation } from './projects'
 
+// Dashboard Service
+export { dashboardService, DashboardService } from './dashboard'
+
+// WebSocket Service
+export { websocketManager, WebSocketManager } from './websocket'
+
 // Re-export for convenience
 import { apiClient } from './api'
 import { authService } from './auth'
 import { projectService } from './projects'
+import { dashboardService } from './dashboard'
+import { websocketManager } from './websocket'
 
 export const api = {
   client: apiClient,
   auth: authService,
-  projects: projectService
+  projects: projectService,
+  dashboard: dashboardService,
+  websocket: websocketManager
 }

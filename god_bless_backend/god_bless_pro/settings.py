@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "corsheaders",
     "accounts",
     "activities",
+    "dashboard",
     "phone_generator",
     "sms_sender",
     "phone_number_validator",

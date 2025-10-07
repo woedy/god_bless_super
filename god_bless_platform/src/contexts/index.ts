@@ -4,3 +4,5 @@
  */
 
 export { AuthProvider, useAuth, AuthContext } from './AuthContext'
+
+export { TaskMonitoringProvider } from './TaskMonitoringContext'

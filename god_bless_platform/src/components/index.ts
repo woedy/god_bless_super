@@ -15,5 +15,8 @@ export * from './layout'
 // Project Components
 export * from './projects'
 
+// Dashboard Components
+export * from './dashboard'
+
 // Chart Components
 // export * from './charts' // TODO: Implement chart components
