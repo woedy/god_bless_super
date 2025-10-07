@@ -203,9 +203,20 @@ export interface FieldMapping {
 // SMS Campaign API Types
 export interface CreateCampaignData {
   name: string
-  message: string
-  projectId: string
-  recipientSource: 'project_numbers' | 'uploaded_file' | 'manual_list'
+  description?: string
+  message_template: string
+  custom_macros?: Record<string, any>
+  target_carrier?: string
+  target_type?: string
+  target_area_codes?: string[]
+  scheduled_time?: string
+  send_immediately?: boolean
+  batch_size?: number
+  rate_limit?: number
+  use_proxy_rotation?: boolean
+  use_smtp_rotation?: boolean
+  projectId?: string
+  recipientSource?: 'project_numbers' | 'uploaded_file' | 'manual_list'
   recipients?: CampaignRecipients
   settings?: Partial<Campaign['settings']>
   scheduleDelivery?: boolean

@@ -21,6 +21,11 @@ import {
   ValidateNumbersPage,
   NumberListPage,
   SMSPage,
+  CampaignsPage,
+  CreateCampaignPage,
+  CampaignDetailsPage,
+  EditCampaignPage,
+  BulkSMSPage,
   TasksPage,
   LandingPage 
 } from './pages'
@@ -151,11 +156,57 @@ function App() {
               } 
             />
             
+            {/* SMS Campaign Routes */}
             <Route 
               path={ROUTES.SMS}
               element={
                 <ProtectedRoute>
                   <SMSPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.SMS_CAMPAIGNS}
+              element={
+                <ProtectedRoute>
+                  <CampaignsPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.SMS_CREATE}
+              element={
+                <ProtectedRoute>
+                  <CreateCampaignPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.SMS_CAMPAIGN_VIEW}
+              element={
+                <ProtectedRoute>
+                  <CampaignDetailsPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.SMS_CAMPAIGN_EDIT}
+              element={
+                <ProtectedRoute>
+                  <EditCampaignPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.SMS_BULK}
+              element={
+                <ProtectedRoute>
+                  <BulkSMSPage />
                 </ProtectedRoute>
               } 
             />

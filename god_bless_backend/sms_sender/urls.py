@@ -1,6 +1,6 @@
 from django.urls import path
 
-from sms_sender.views import get_smtps_providers_view, single_SMS_sender_view
+from sms_sender.views import get_smtps_providers_view, single_SMS_sender_view, get_all_carrier_list_view
 from sms_sender import views, campaign_views
 
 
@@ -34,4 +34,7 @@ urlpatterns = [
     
     # Dashboard
     path('dashboard/', campaign_views.campaign_dashboard, name='campaign_dashboard'),
+    
+    # Carrier providers
+    path('get-all-carrier-list/', get_all_carrier_list_view, name='get_all_carrier_list'),
 ]

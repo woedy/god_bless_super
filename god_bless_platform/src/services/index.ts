@@ -19,6 +19,9 @@ export { dashboardService, DashboardService } from './dashboard'
 // Phone Number Service
 export { phoneNumberService, PhoneNumberService } from './phoneNumbers'
 
+// SMS Service
+export { smsService, SMSService } from './sms'
+
 // WebSocket Service
 export { websocketManager, WebSocketManager } from './websocket'
 
@@ -28,6 +31,7 @@ import { authService } from './auth'
 import { projectService } from './projects'
 import { dashboardService } from './dashboard'
 import { phoneNumberService } from './phoneNumbers'
+import { smsService } from './sms'
 import { websocketManager } from './websocket'
 
 export const api = {
@@ -36,5 +40,6 @@ export const api = {
   projects: projectService,
   dashboard: dashboardService,
   phoneNumbers: phoneNumberService,
+  sms: smsService,
   websocket: websocketManager
 }
