@@ -380,7 +380,7 @@ FILE_UPLOAD_PERMISSIONS = 0o644
 ALLOWED_UPLOAD_EXTENSIONS = ['csv', 'txt', 'json', 'xlsx', 'xls']
 
 # Rate Limiting Configuration
-RATE_LIMIT_ENABLE = True
+RATE_LIMIT_ENABLE = False  # Temporarily disable rate limiting
 RATE_LIMIT_USE_CACHE = 'default'
 
 # Audit Logging Configuration

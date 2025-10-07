@@ -5,7 +5,7 @@ echo "Starting God Bless Backend..."
 
 # Wait for database to be ready
 echo "Waiting for database..."
-while ! pg_isready -h ${POSTGRES_HOST:-db} -p ${POSTGRES_PORT:-5432} -U ${POSTGRES_USER:-god_bless_user}; do
+while ! pg_isready -h ${POSTGRES_HOST:-db} -p ${POSTGRES_PORT:-5432} -U ${POSTGRES_USER:-god_bless_postgres}; do
   echo "Database is unavailable - sleeping"
   sleep 2
 done

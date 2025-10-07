@@ -124,6 +124,24 @@ class UserRateThrottle(SimpleRateThrottle):
     """DRF throttle for authenticated users"""
     scope = 'user'
     
+    def allow_request(self, request, view):
+        """
+        Override to check user's individual rate limit
+        """
+        # Check if rate limiting is globally disabled
+        from django.conf import settings
+        if not getattr(settings, 'RATE_LIMIT_ENABLE', True):
+            return True
+            
+        if request.user and request.user.is_authenticated:
+            # Check if user has unlimited rate limit (0 means unlimited)
+            user_rate_limit = getattr(request.user, 'api_rate_limit', 1000)
+            if user_rate_limit == 0:
+                return True
+        
+        # Use default throttling logic
+        return super().allow_request(request, view)
+    
     def get_cache_key(self, request, view):
         if request.user and request.user.is_authenticated:
             ident = request.user.pk
@@ -139,6 +157,13 @@ class UserRateThrottle(SimpleRateThrottle):
 class AnonRateThrottle(SimpleRateThrottle):
     """DRF throttle for anonymous users"""
     scope = 'anon'
+    
+    def allow_request(self, request, view):
+        """Override to check global rate limiting setting"""
+        from django.conf import settings
+        if not getattr(settings, 'RATE_LIMIT_ENABLE', True):
+            return True
+        return super().allow_request(request, view)
     
     def get_cache_key(self, request, view):
         if request.user and request.user.is_authenticated:

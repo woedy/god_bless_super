@@ -43,7 +43,7 @@ echo Services are starting!
 echo ========================================
 echo.
 echo Backend API: http://localhost:6161
-echo Frontend: http://localhost:4173
+echo Frontend: http://localhost:5173
 echo Admin Panel: http://localhost:6161/admin
 echo.
 echo To create a superuser, run:

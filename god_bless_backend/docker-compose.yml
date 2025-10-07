@@ -48,14 +48,24 @@ services:
       - redis
     restart: always
 
-  # React Application
-  god_bless_frontend:
+  # React Application (New Platform)
+  god_bless_platform:
     build:
-      context: ../god_bless_frontend # Adjust the path to your React app
+      context: ../god_bless_platform
+      dockerfile: Dockerfile.dev
     ports:
-      - "5173:5173" # Map to the correct Vite dev server port
+      - "5173:5173" # Vite dev server port
+    volumes:
+      - ../god_bless_platform:/app
+      - /app/node_modules
     environment:
-      - REACT_APP_API_URL=http://localhost:6161 # API URL for Django service (use localhost for browser access)
+      - VITE_API_URL=http://localhost:6161/api
+      - VITE_WS_URL=ws://localhost:6161/ws
+      - VITE_APP_NAME=God Bless Platform
+      - VITE_VERSION=1.0.0
+      - VITE_ENVIRONMENT=development
+    depends_on:
+      - god_bless_app
     restart: always
 
   # Celery Worker

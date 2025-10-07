@@ -1,23 +1,40 @@
-FROM python:3.8-alpine
+FROM python:3.9-slim
 
 ENV PYTHONUNBUFFERED=1
 
-RUN apk update && \
-    apk add libffi-dev zlib-dev jpeg-dev postgresql-dev gcc python3-dev musl-dev \
-    postgresql-client redis bash
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    postgresql-client \
+    redis-tools \
+    gcc \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /god_bless_django
 
+# Copy requirements and install Python dependencies
 COPY requirements.txt requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip3 install -r requirements.txt
-
-# Copy the entrypoint script
-COPY docker-entrypoint.sh /docker-entrypoint.sh
-RUN chmod +x /docker-entrypoint.sh
-
-# Copy the application code
+# Copy application code
 COPY . .
 
-# Set the entrypoint
-ENTRYPOINT ["/docker-entrypoint.sh"]
+# Create startup script inline
+RUN echo '#!/bin/bash\n\
+set -e\n\
+echo "Starting God Bless Backend..."\n\
+echo "Waiting for database..."\n\
+while ! pg_isready -h ${POSTGRES_HOST:-db} -p ${POSTGRES_PORT:-5432} -U ${POSTGRES_USER:-god_bless_postgres}; do\n\
+  echo "Database is unavailable - sleeping"\n\
+  sleep 2\n\
+done\n\
+echo "Database is up!"\n\
+echo "Running migrations..."\n\
+python manage.py migrate --noinput\n\
+echo "Collecting static files..."\n\
+python manage.py collectstatic --noinput --clear\n\
+echo "Starting application..."\n\
+exec "$@"' > /startup.sh && chmod +x /startup.sh
+
+ENTRYPOINT ["/startup.sh"]

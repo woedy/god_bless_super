@@ -18,6 +18,7 @@ services:
     depends_on:
       - backend
       - frontend
+      - god_bless_platform
     restart: unless-stopped
     networks:
       - god_bless_network
@@ -189,7 +190,7 @@ services:
     networks:
       - god_bless_network
 
-  # React Frontend Application
+  # React Frontend Application (Legacy)
   frontend:
     build:
       context: ./god_bless_frontend
@@ -197,6 +198,30 @@ services:
       args:
         - VITE_API_URL=${VITE_API_URL:-http://localhost/api}
     container_name: god_bless_frontend
+    restart: unless-stopped
+    networks:
+      - god_bless_network
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # New React Platform Application
+  god_bless_platform:
+    build:
+      context: ./god_bless_platform
+      dockerfile: docker/Dockerfile.prod
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost/api}
+        - VITE_WS_URL=${VITE_WS_URL:-ws://localhost/ws}
+        - VITE_APP_NAME=${VITE_APP_NAME:-God Bless Platform}
+        - VITE_VERSION=${VITE_VERSION:-1.0.0}
+        - VITE_ENVIRONMENT=${VITE_ENVIRONMENT:-production}
+    container_name: god_bless_platform
+    ports:
+      - "3001:80"  # Dedicated port separate from existing frontend
     restart: unless-stopped
     networks:
       - god_bless_network

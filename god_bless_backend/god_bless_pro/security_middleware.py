@@ -148,15 +148,21 @@ class RateLimitMiddleware(MiddlewareMixin):
         '/static/',
         '/media/',
         '/api/health/',
+        '/api/accounts/login/',  # Temporarily exempt login from rate limiting
+        '/api/accounts/register/',  # Temporarily exempt register from rate limiting
     ]
     
     def __init__(self, get_response):
         super().__init__(get_response)
-        self.user_limiter = UserRateLimiter(rate=1000, period=3600)  # 1000 req/hour
         self.ip_limiter = IPRateLimiter(rate=100, period=3600)  # 100 req/hour for anonymous
     
     def process_request(self, request):
         """Check rate limits"""
+        # Check if rate limiting is enabled
+        from django.conf import settings
+        if not getattr(settings, 'RATE_LIMIT_ENABLE', True):
+            return None
+            
         # Skip for exempt paths
         if any(request.path.startswith(path) for path in self.EXEMPT_PATHS):
             return None
@@ -164,7 +170,16 @@ class RateLimitMiddleware(MiddlewareMixin):
         # Determine identifier and limiter
         if hasattr(request, 'user') and request.user.is_authenticated:
             identifier = str(request.user.id)
-            limiter = self.user_limiter
+            
+            # Get user's individual rate limit (0 means unlimited)
+            user_rate_limit = getattr(request.user, 'api_rate_limit', 1000)
+            
+            # If rate limit is 0, skip rate limiting for this user
+            if user_rate_limit == 0:
+                return None
+            
+            # Create user-specific limiter
+            limiter = UserRateLimiter(rate=user_rate_limit, period=3600)
         else:
             identifier = get_client_ip(request)
             limiter = self.ip_limiter
