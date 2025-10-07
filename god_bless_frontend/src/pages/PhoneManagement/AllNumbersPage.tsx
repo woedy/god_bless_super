@@ -415,60 +415,76 @@ const AllNumbersPage = () => {
 
   const handleExport = async (format: 'csv' | 'json', filteredData: PhoneNumber[]) => {
     try {
-      // Fetch all filtered data for export (not just current page)
-      const params = new URLSearchParams({
+      // Build filters object based on current filter state
+      const filters: any = {};
+      
+      if (filterValues.search) {
+        filters.search = filterValues.search.toString();
+      }
+      if (filterValues.valid_number && filterValues.valid_number !== '') {
+        filters.valid_number = filterValues.valid_number.toString();
+      }
+      if (filterValues.type && filterValues.type !== '') {
+        filters.type = filterValues.type.toString();
+      }
+      if (filterValues.carrier && filterValues.carrier !== '') {
+        filters.carrier = filterValues.carrier.toString();
+      }
+      if (filterValues.country_name && filterValues.country_name !== '') {
+        filters.country_name = filterValues.country_name.toString();
+      }
+
+      console.log('🔍 EXPORT DEBUG - Exporting with filters:', filters);
+      console.log('🔍 EXPORT DEBUG - Current filter values:', filterValues);
+
+      // Use the proper export endpoint
+      const exportPayload = {
         user_id: userID,
         project_id: projectID,
-        page_size: '10000', // Large page size to get all filtered results
-        search: filterValues.search?.toString() || '',
-      });
-
-      // Add filter parameters
-      if (filterValues.valid_number) {
-        params.append('valid_number', filterValues.valid_number.toString());
-      }
-      if (filterValues.type) {
-        params.append('type', filterValues.type.toString());
-      }
-      if (filterValues.carrier) {
-        params.append('carrier', filterValues.carrier.toString());
-      }
-      if (filterValues.country_name) {
-        params.append('country_name', filterValues.country_name.toString());
-      }
+        format: format,
+        filters: filters,
+        fields: ['phone_number', 'carrier', 'type', 'area_code', 'valid_number', 'created_at', 'location', 'country_name'],
+        use_background: false, // For immediate export
+        include_invalid: true, // Include all numbers based on filters
+        include_metadata: true
+      };
 
       const response = await fetch(
-        `${baseUrl}api/phone-generator/list-numbers/?${params}`,
+        `${baseUrl}api/phone-generator/export/`,
         {
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Token ${userToken}`,
           },
+          body: JSON.stringify(exportPayload),
         }
       );
 
       if (!response.ok) {
-        throw new Error('Failed to fetch export data');
+        throw new Error('Failed to export data');
       }
 
       const result = await response.json();
-      const exportData = result.data.numbers.map((row: PhoneNumber) => ({
-        'Phone Number': row.phone_number,
-        Status: row.valid_number === null ? 'Pending' : row.valid_number ? 'Valid' : 'Invalid',
-        Carrier: row.carrier || '',
-        Location: row.location || '',
-        Type: row.type || '',
-        Country: row.country_name || '',
-        'Created At': row.created_at,
-      }));
+      
+      if (result.data.content) {
+        // Create and download the file
+        const blob = new Blob([result.data.content], { 
+          type: format === 'csv' ? 'text/csv' : 'application/json' 
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = result.data.filename || `phone-numbers-filtered.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
 
-      if (format === 'csv') {
-        exportToCSV(exportData, 'phone-numbers-filtered');
+        toast.success(`Exported ${result.data.total_records} filtered numbers as ${format.toUpperCase()}`);
       } else {
-        exportToJSON(exportData, 'phone-numbers-filtered');
+        throw new Error('No content received from export');
       }
-
-      toast.success(`Exported ${exportData.length} filtered numbers as ${format.toUpperCase()}`);
     } catch (error) {
       console.error('Export error:', error);
       toast.error('Failed to export filtered data');

@@ -89,15 +89,41 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       setDownloadUrl(null)
       setIsExporting(false)
       
-      // Estimate export count
+      // Get accurate export count based on current filters
       if (selectedNumbers && selectedNumbers.length > 0) {
         setEstimatedCount(selectedNumbers.length)
       } else {
-        // Use project phone count or make an API call to get filtered count
-        setEstimatedCount(project.phone_stats?.total || 0)
+        // Make API call to get filtered count
+        getFilteredCount()
       }
     }
-  }, [isOpen, selectedNumbers, project])
+  }, [isOpen, selectedNumbers, project, filters])
+
+  // Function to get the actual filtered count
+  const getFilteredCount = async () => {
+    try {
+      // Use the same filters as the export but with page_size=1 to get just the count
+      const countFilters = {
+        ...filters,
+        projectId: project.id,
+        page: 1,
+        pageSize: 1
+      }
+      
+      const response = await phoneNumberService.getNumbers(countFilters)
+      if (response.success && response.data) {
+        setEstimatedCount(response.data.count)
+        console.log('🔍 ExportDialog - Updated estimated count:', response.data.count)
+      } else {
+        // Fallback to project total if API call fails
+        setEstimatedCount(project.phone_stats?.total || 0)
+      }
+    } catch (error) {
+      console.error('Failed to get filtered count:', error)
+      // Fallback to project total if API call fails
+      setEstimatedCount(project.phone_stats?.total || 0)
+    }
+  }
 
   // WebSocket task progress monitoring
   useEffect(() => {
@@ -220,8 +246,12 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           setProgressMessage('Export completed!')
           
           const content = exportData.content
-          const filename = exportData.filename || `phone_numbers_export.${exportOptions.format}`
+          // Ensure the filename uses the selected format
+          const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')
+          const filename = exportData.filename || `phone_numbers_${timestamp}.${exportOptions.format}`
           const format = exportData.format || exportOptions.format
+          
+          console.log('🔍 ExportDialog - Creating download with format:', format, 'filename:', filename)
           
           const mimeTypes = {
             'csv': 'text/csv',
@@ -238,8 +268,11 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           // Store both the URL and filename for download
           setDownloadUrl(url)
           
-          // Store filename in state for download handler
-          setExportOptions(prev => ({ ...prev, downloadFilename: filename }))
+          // Store filename in state for download handler with correct extension
+          setExportOptions(prev => ({ 
+            ...prev, 
+            downloadFilename: filename.endsWith(`.${format}`) ? filename : `${filename.split('.')[0]}.${format}`
+          }))
         } else {
           // Backend returned success but no content field - check what we have
           console.error('Export response missing content field:', exportData)
@@ -282,10 +315,29 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
       // Create a temporary link element to trigger download with filename
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.download = exportOptions.downloadFilename || `phone_numbers_export.${exportOptions.format}`
+      
+      // Ensure the filename has the correct extension for the selected format
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')
+      const defaultFilename = `phone_numbers_${timestamp}.${exportOptions.format}`
+      let filename = exportOptions.downloadFilename || defaultFilename
+      
+      // Double-check the file extension matches the selected format
+      if (!filename.endsWith(`.${exportOptions.format}`)) {
+        const nameWithoutExt = filename.split('.')[0]
+        filename = `${nameWithoutExt}.${exportOptions.format}`
+      }
+      
+      link.download = filename
+      console.log('🔍 ExportDialog - Downloading file:', filename, 'format:', exportOptions.format)
+      
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
+      
+      // Clean up the blob URL to free memory
+      setTimeout(() => {
+        URL.revokeObjectURL(downloadUrl)
+      }, 1000)
     }
   }
 
@@ -375,6 +427,13 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 {estimatedCount.toLocaleString()}
               </div>
               <div className="text-sm text-gray-600">Numbers to Export</div>
+              {filters?.lineType && (
+                <div className="text-xs text-blue-600 mt-1">
+                  {filters.lineType === 'mobile' ? '📱 Mobile Only' : 
+                   filters.lineType === 'landline' ? '🏠 Landline Only' : 
+                   '📞 All Types'}
+                </div>
+              )}
             </div>
           </Card>
           
@@ -384,9 +443,49 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 {estimatedSize}
               </div>
               <div className="text-sm text-gray-600">Estimated Size</div>
+              {filters && Object.keys(filters).length > 0 && (
+                <div className="text-xs text-green-600 mt-1">
+                  ✓ Filters Applied
+                </div>
+              )}
             </div>
           </Card>
         </div>
+
+        {/* Active Filters Summary */}
+        {filters && Object.keys(filters).length > 0 && (
+          <Card className="p-4 bg-blue-50 border-blue-200">
+            <h4 className="font-medium text-blue-900 mb-2">Active Filters</h4>
+            <div className="flex flex-wrap gap-2">
+              {filters.lineType && (
+                <Badge variant="primary" size="sm">
+                  Line Type: {filters.lineType === 'mobile' ? '📱 Mobile' : 
+                             filters.lineType === 'landline' ? '🏠 Landline' : filters.lineType}
+                </Badge>
+              )}
+              {filters.isValid !== undefined && (
+                <Badge variant="secondary" size="sm">
+                  Status: {filters.isValid ? 'Valid' : 'Invalid'}
+                </Badge>
+              )}
+              {filters.carrier && (
+                <Badge variant="secondary" size="sm">
+                  Carrier: {filters.carrier}
+                </Badge>
+              )}
+              {filters.country && (
+                <Badge variant="secondary" size="sm">
+                  Country: {filters.country}
+                </Badge>
+              )}
+              {filters.search && (
+                <Badge variant="secondary" size="sm">
+                  Search: "{filters.search}"
+                </Badge>
+              )}
+            </div>
+          </Card>
+        )}
 
         {/* Format Selection */}
         <div>

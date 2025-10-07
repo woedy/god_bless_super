@@ -371,6 +371,7 @@ export function NumberListPage() {
             onFiltersChange={handleFiltersChange}
             onApplyFilters={handleApplyFilters}
             onClearFilters={handleClearFilters}
+            availableLineTypes={['mobile', 'landline']}
           />
         )}
 

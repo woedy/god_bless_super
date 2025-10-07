@@ -470,7 +470,13 @@ class PhoneNumberServiceClass {
       
       if (params.filters.carrier) filterObj.carrier = params.filters.carrier
       if (params.filters.country) filterObj.country_name = params.filters.country
-      if (params.filters.lineType) filterObj.type = params.filters.lineType
+      
+      // Map lineType to type for backend compatibility
+      if (params.filters.lineType) {
+        filterObj.type = params.filters.lineType
+        console.log('🔍 PhoneNumberService - Mapping lineType filter:', params.filters.lineType, '-> type:', filterObj.type)
+      }
+      
       if (params.filters.source) filterObj.source = params.filters.source
       if (params.filters.search) filterObj.search = params.filters.search
       if (params.filters.areaCode) filterObj.area_code = params.filters.areaCode
@@ -481,7 +487,7 @@ class PhoneNumberServiceClass {
 
     console.log('🔍 PhoneNumberService - Final export request data:', requestData)
     
-    const response = await apiClient.post<ExportResponse>('/phone-generator/export/', requestData)
+    const response = await apiClient.post<ExportResponse>(API_ENDPOINTS.PHONE_NUMBERS.EXPORT, requestData)
     
     console.log('🔍 PhoneNumberService - Export response:', response)
     console.log('PhoneNumberService - Response success:', response.success)

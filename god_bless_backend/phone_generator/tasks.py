@@ -7,6 +7,7 @@ from celery import shared_task
 from celery.utils.log import get_task_logger
 from django.contrib.auth import get_user_model
 from django.db import transaction
+from django.db.models import Q
 from django.utils import timezone
 
 from tasks.base import ProgressTrackingTask, BatchProcessingTask
@@ -687,14 +688,32 @@ def export_phone_numbers_task(self, user_id, project_id, format, filters=None,
             queryset = queryset.filter(project=project)
         
         if filters:
+            # Apply filters (same as export view for consistency)
+            if filters.get('search'):
+                queryset = queryset.filter(
+                    Q(phone_number__icontains=filters['search'])
+                )
+            
+            if filters.get('valid_number') is not None:
+                if str(filters['valid_number']).lower() == 'true':
+                    queryset = queryset.filter(valid_number=True)
+                elif str(filters['valid_number']).lower() == 'false':
+                    queryset = queryset.filter(valid_number=False)
+                elif str(filters['valid_number']).lower() == 'null':
+                    queryset = queryset.filter(valid_number__isnull=True)
+            
             if filters.get('carrier'):
-                queryset = queryset.filter(carrier=filters['carrier'])
+                queryset = queryset.filter(carrier__icontains=filters['carrier'])
+            
+            # Handle line type filter (mobile/landline)
             if filters.get('type'):
-                queryset = queryset.filter(type=filters['type'])
+                queryset = queryset.filter(type__iexact=filters['type'])
+            
+            if filters.get('country_name'):
+                queryset = queryset.filter(country_name__icontains=filters['country_name'])
+            
             if filters.get('area_code'):
                 queryset = queryset.filter(area_code=filters['area_code'])
-            if filters.get('valid_number') is not None:
-                queryset = queryset.filter(valid_number=filters['valid_number'])
         
         total_count = queryset.count()
         self.update_progress(10, f"Found {total_count} records to export")

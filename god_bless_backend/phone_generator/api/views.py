@@ -1657,6 +1657,7 @@ def export_phone_numbers_view(request):
     if filters.get('carrier'):
         queryset = queryset.filter(carrier__icontains=filters['carrier'])
     
+    # Handle line type filter (mobile/landline)
     if filters.get('type'):
         queryset = queryset.filter(type__iexact=filters['type'])
     
