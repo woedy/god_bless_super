@@ -115,9 +115,13 @@ function DataTable<T extends Record<string, any>>({
   };
 
   const handleFilterChange = (newFilters: FilterValue) => {
+    console.log('DataTable handleFilterChange called with:', newFilters); // Debug log
     setFilterValues(newFilters);
     if (onFilter) {
+      console.log('Calling onFilter callback with:', newFilters); // Debug log
       onFilter(newFilters);
+    } else {
+      console.log('No onFilter callback provided'); // Debug log
     }
   };
 

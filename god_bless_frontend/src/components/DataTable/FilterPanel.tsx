@@ -12,7 +12,10 @@ const FilterPanel: React.FC<FilterPanelProps> = ({
   if (!isOpen) return null;
 
   const handleChange = (key: string, value: any) => {
-    onChange({ ...values, [key]: value });
+    console.log('FilterPanel handleChange called:', key, '=', value); // Debug log
+    const newValues = { ...values, [key]: value };
+    console.log('FilterPanel calling onChange with:', newValues); // Debug log
+    onChange(newValues);
   };
 
   const handleMultiSelectChange = (key: string, option: string) => {

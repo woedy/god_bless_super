@@ -62,7 +62,7 @@ export const NumberList: React.FC<NumberListProps> = ({
   // Load numbers when filters or pagination change
   useEffect(() => {
     loadNumbers()
-  }, [currentPage, pageSize, searchQuery, validationFilter, carrierFilter, countryFilter, lineTypeFilter, sortBy, project.id, externalFilters, onError])
+  }, [currentPage, pageSize, searchQuery, validationFilter, carrierFilter, countryFilter, lineTypeFilter, sortBy, project.id, externalFilters])
 
   // Update select all state when selection changes
   useEffect(() => {
@@ -73,44 +73,54 @@ export const NumberList: React.FC<NumberListProps> = ({
     try {
       setIsLoading(true)
 
-      // Use external filters if provided, otherwise use internal filters
-      const filters: NumberFilters = externalFilters ? {
-        ...externalFilters,
-        projectId: project.id,
-        page: currentPage,
-        pageSize,
-        ordering: externalFilters.ordering || sortBy
-      } : {
+      // Build filters object combining external and internal filters
+      const filters: NumberFilters = {
         projectId: project.id,
         page: currentPage,
         pageSize,
         ordering: sortBy
       }
 
-      // Only use internal filters if no external filters provided
-      if (!externalFilters) {
-        if (searchQuery.trim()) {
-          filters.search = searchQuery.trim()
-        }
-
-        if (validationFilter !== 'all') {
-          filters.isValid = validationFilter === 'valid'
-        }
-
-        if (carrierFilter) {
-          filters.carrier = carrierFilter
-        }
-
-        if (countryFilter) {
-          filters.country = countryFilter
-        }
-
-        if (lineTypeFilter) {
-          filters.lineType = lineTypeFilter
-        }
+      // Apply external filters first (from FilterPanel)
+      if (externalFilters) {
+        if (externalFilters.search) filters.search = externalFilters.search
+        if (externalFilters.isValid !== undefined) filters.isValid = externalFilters.isValid
+        if (externalFilters.carrier) filters.carrier = externalFilters.carrier
+        if (externalFilters.country) filters.country = externalFilters.country
+        if (externalFilters.lineType) filters.lineType = externalFilters.lineType
       }
 
-      console.log('NumberList - Loading with filters:', filters)
+      // Apply internal filters (from the component's own filter controls)
+      if (searchQuery.trim()) {
+        filters.search = searchQuery.trim()
+      }
+
+      if (validationFilter !== 'all') {
+        filters.isValid = validationFilter === 'valid'
+      }
+
+      if (carrierFilter) {
+        filters.carrier = carrierFilter
+      }
+
+      if (countryFilter) {
+        filters.country = countryFilter
+      }
+
+      if (lineTypeFilter) {
+        filters.lineType = lineTypeFilter
+      }
+
+      console.log('🔍 NumberList - Loading with filters:', filters)
+      console.log('🔍 NumberList - External filters:', externalFilters)
+      console.log('🔍 NumberList - Internal filters:', {
+        searchQuery,
+        validationFilter,
+        carrierFilter,
+        countryFilter,
+        lineTypeFilter
+      })
+      
       const response = await phoneNumberService.getNumbers(filters)
 
       if (response.success) {

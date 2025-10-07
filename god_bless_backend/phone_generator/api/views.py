@@ -250,8 +250,15 @@ def get_all_numbers_view(request):
     project_id = request.query_params.get('project_id', None)
     search_query = request.query_params.get('search', '')
     date = request.query_params.get('date', '')
+    valid_number = request.query_params.get('valid_number', '')
+    carrier = request.query_params.get('carrier', '')
+    phone_type = request.query_params.get('type', '')
+    country_name = request.query_params.get('country_name', '')
     page_number = request.query_params.get('page', 1)
     page_size = int(request.query_params.get('page_size', 20))  # Default to 20, allow custom page size
+
+    # Debug logging
+    print(f"DEBUG - Received filters: valid_number={valid_number}, carrier={carrier}, phone_type={phone_type}, country_name={country_name}, search={search_query}")
 
     
     if not user_id:
@@ -277,7 +284,6 @@ def get_all_numbers_view(request):
 
     all_numbers = PhoneNumber.objects.all().filter(is_archived=False, user=user, project=project).order_by('-id')
 
-
     if search_query:
         all_numbers = all_numbers.filter(
             Q(phone_number__icontains=search_query) 
@@ -287,6 +293,27 @@ def get_all_numbers_view(request):
         all_numbers = all_numbers.filter(
             created_at=date
         )
+
+    # Filter by validation status
+    if valid_number:
+        if valid_number.lower() == 'true':
+            all_numbers = all_numbers.filter(valid_number=True)
+        elif valid_number.lower() == 'false':
+            all_numbers = all_numbers.filter(valid_number=False)
+        elif valid_number.lower() == 'null':
+            all_numbers = all_numbers.filter(valid_number__isnull=True)
+
+    # Filter by carrier
+    if carrier:
+        all_numbers = all_numbers.filter(carrier__icontains=carrier)
+
+    # Filter by phone type
+    if phone_type:
+        all_numbers = all_numbers.filter(type__iexact=phone_type)
+
+    # Filter by country name
+    if country_name:
+        all_numbers = all_numbers.filter(country_name__icontains=country_name)
 
 
     paginator = Paginator(all_numbers, page_size)

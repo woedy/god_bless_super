@@ -294,7 +294,8 @@ class PhoneNumberServiceClass {
    * Get phone numbers with filtering and pagination
    */
   async getNumbers(filters: NumberFilters = {}): Promise<ApiResponse<PaginatedResponse<PhoneNumber>>> {
-    console.log('PhoneNumberService - Getting numbers with filters:', filters)
+    console.log('🔍 PhoneNumberService - Getting numbers with filters:', filters)
+    console.log('🔍 PhoneNumberService - Building API parameters...')
     
     const params: Record<string, unknown> = {}
     
@@ -306,6 +307,7 @@ class PhoneNumberServiceClass {
         const user = JSON.parse(userData)
         // Backend expects user_id field, not the primary key id
         params.user_id = user.user_id || user.id
+        console.log('🔍 PhoneNumberService - User ID:', params.user_id)
       } catch (error) {
         console.error('Failed to parse user data:', error)
       }
@@ -317,8 +319,39 @@ class PhoneNumberServiceClass {
     if (filters.search) params.search = filters.search
     if (filters.ordering) params.ordering = filters.ordering
     
-    // Filters - only send project_id as that's what backend expects
+    // Filters - map frontend filter names to backend parameter names
     if (filters.projectId) params.project_id = filters.projectId
+    
+    // Add validation status filter
+    if (filters.isValid !== undefined) {
+      params.valid_number = filters.isValid.toString()
+      console.log('🔍 PhoneNumberService - Adding valid_number filter:', params.valid_number)
+    }
+    
+    // Add carrier filter
+    if (filters.carrier) {
+      params.carrier = filters.carrier
+      console.log('🔍 PhoneNumberService - Adding carrier filter:', params.carrier)
+    }
+    
+    // Add country filter (backend expects country_name)
+    if (filters.country) {
+      params.country_name = filters.country
+      console.log('🔍 PhoneNumberService - Adding country_name filter:', params.country_name)
+    }
+    
+    // Add line type filter (backend expects type)
+    if (filters.lineType) {
+      params.type = filters.lineType
+      console.log('🔍 PhoneNumberService - Adding type filter:', params.type)
+    }
+
+    console.log('🔍 PhoneNumberService - Final API parameters:', params)
+    
+    // Build the full URL for debugging
+    const queryString = new URLSearchParams(params as Record<string, string>).toString()
+    const fullUrl = `${API_ENDPOINTS.PHONE_NUMBERS.LIST}?${queryString}`
+    console.log('🔍 PhoneNumberService - Full API URL:', fullUrl)
 
     try {
       const backendResponse = await apiClient.get<{

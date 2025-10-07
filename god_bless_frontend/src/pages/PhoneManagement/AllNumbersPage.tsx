@@ -31,31 +31,53 @@ const AllNumbersPage = () => {
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const navigate = useNavigate();
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (customFilters?: FilterValue, customPage?: number) => {
     setLoading(true);
     try {
+      const currentFilters = customFilters || filterValues;
+      const currentPage = customPage || pagination.page;
+      
       const params = new URLSearchParams({
         user_id: userID,
         project_id: projectID,
-        page: pagination.page.toString(),
-        search: filterValues.search?.toString() || '',
+        page: currentPage.toString(),
+        page_size: pagination.pageSize.toString(),
+        search: currentFilters.search?.toString() || '',
       });
 
-      const response = await fetch(
-        `${baseUrl}api/phone-generator/list-numbers/?${params}`,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Token ${userToken}`,
-          },
-        }
-      );
+      // Add additional filter parameters - only if they have values
+      if (currentFilters.valid_number && currentFilters.valid_number !== '') {
+        params.append('valid_number', currentFilters.valid_number.toString());
+      }
+      if (currentFilters.type && currentFilters.type !== '') {
+        params.append('type', currentFilters.type.toString());
+      }
+      if (currentFilters.carrier && currentFilters.carrier !== '') {
+        params.append('carrier', currentFilters.carrier.toString());
+      }
+      if (currentFilters.country_name && currentFilters.country_name !== '') {
+        params.append('country_name', currentFilters.country_name.toString());
+      }
+
+      const fullUrl = `${baseUrl}api/phone-generator/list-numbers/?${params}`;
+      console.log('🔍 FILTER DEBUG - Fetching with URL:', fullUrl);
+      console.log('🔍 FILTER DEBUG - Current filters object:', currentFilters);
+      console.log('🔍 FILTER DEBUG - Params string:', params.toString());
+
+      const response = await fetch(fullUrl, {
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Token ${userToken}`,
+        },
+      });
 
       if (!response.ok) {
         throw new Error('Failed to fetch numbers');
       }
 
       const result = await response.json();
+      console.log('🔍 FILTER DEBUG - API Response:', result);
+      
       setData(result.data.numbers);
       setPagination((prev) => ({
         ...prev,
@@ -67,7 +89,7 @@ const AllNumbersPage = () => {
     } finally {
       setLoading(false);
     }
-  }, [pagination.page, filterValues]);
+  }, [pagination.page, pagination.pageSize, filterValues]);
 
   useEffect(() => {
     fetchData();
@@ -197,6 +219,25 @@ const AllNumbersPage = () => {
         { label: 'Mobile', value: 'Mobile' },
         { label: 'Landline', value: 'Landline' },
       ],
+    },
+    {
+      key: 'carrier',
+      label: 'Carrier',
+      type: 'select',
+      options: [
+        { label: 'All', value: '' },
+        { label: 'AT&T', value: 'AT&T' },
+        { label: 'Verizon', value: 'Verizon' },
+        { label: 'T-Mobile', value: 'T-Mobile' },
+        { label: 'Sprint', value: 'Sprint' },
+        { label: 'Other', value: 'Other' },
+      ],
+    },
+    {
+      key: 'country_name',
+      label: 'Country',
+      type: 'text',
+      placeholder: 'Filter by country...',
     },
   ];
 
@@ -372,29 +413,71 @@ const AllNumbersPage = () => {
     }
   };
 
-  const handleExport = (format: 'csv' | 'json', filteredData: PhoneNumber[]) => {
-    const exportData = filteredData.map((row) => ({
-      'Phone Number': row.phone_number,
-      Status: row.valid_number === null ? 'Pending' : row.valid_number ? 'Valid' : 'Invalid',
-      Carrier: row.carrier || '',
-      Location: row.location || '',
-      Type: row.type || '',
-      Country: row.country_name || '',
-      'Created At': row.created_at,
-    }));
+  const handleExport = async (format: 'csv' | 'json', filteredData: PhoneNumber[]) => {
+    try {
+      // Fetch all filtered data for export (not just current page)
+      const params = new URLSearchParams({
+        user_id: userID,
+        project_id: projectID,
+        page_size: '10000', // Large page size to get all filtered results
+        search: filterValues.search?.toString() || '',
+      });
 
-    if (format === 'csv') {
-      exportToCSV(exportData, 'phone-numbers');
-    } else {
-      exportToJSON(exportData, 'phone-numbers');
+      // Add filter parameters
+      if (filterValues.valid_number) {
+        params.append('valid_number', filterValues.valid_number.toString());
+      }
+      if (filterValues.type) {
+        params.append('type', filterValues.type.toString());
+      }
+      if (filterValues.carrier) {
+        params.append('carrier', filterValues.carrier.toString());
+      }
+      if (filterValues.country_name) {
+        params.append('country_name', filterValues.country_name.toString());
+      }
+
+      const response = await fetch(
+        `${baseUrl}api/phone-generator/list-numbers/?${params}`,
+        {
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Token ${userToken}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Failed to fetch export data');
+      }
+
+      const result = await response.json();
+      const exportData = result.data.numbers.map((row: PhoneNumber) => ({
+        'Phone Number': row.phone_number,
+        Status: row.valid_number === null ? 'Pending' : row.valid_number ? 'Valid' : 'Invalid',
+        Carrier: row.carrier || '',
+        Location: row.location || '',
+        Type: row.type || '',
+        Country: row.country_name || '',
+        'Created At': row.created_at,
+      }));
+
+      if (format === 'csv') {
+        exportToCSV(exportData, 'phone-numbers-filtered');
+      } else {
+        exportToJSON(exportData, 'phone-numbers-filtered');
+      }
+
+      toast.success(`Exported ${exportData.length} filtered numbers as ${format.toUpperCase()}`);
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error('Failed to export filtered data');
     }
-
-    toast.success(`Exported ${filteredData.length} numbers as ${format.toUpperCase()}`);
   };
 
   return (
     <div className="mx-auto max-w-full">
-      <Breadcrumb pageName="All Phone Numbers" />
+      <Breadcrumb pageName="All Phone Numbers (NEW VERSION WITH FILTERS)" />
 
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -410,6 +493,26 @@ const AllNumbersPage = () => {
           >
             <FiCheckCircle size={16} />
             Bulk Validate
+          </button>
+          <button
+            onClick={() => {
+              console.log('🔍 FILTER DEBUG - Manual refresh clicked, current filters:', filterValues);
+              fetchData();
+            }}
+            className="rounded bg-gray-500 px-4 py-2 text-white hover:bg-opacity-90"
+          >
+            Refresh
+          </button>
+          <button
+            onClick={() => {
+              const testFilters = { valid_number: 'true', carrier: 'AT&T' };
+              console.log('🔍 FILTER DEBUG - Testing filters:', testFilters);
+              setFilterValues(testFilters);
+              fetchData(testFilters, 1);
+            }}
+            className="rounded bg-blue-500 px-4 py-2 text-white hover:bg-opacity-90"
+          >
+            Test Filters
           </button>
         </div>
 
@@ -451,11 +554,25 @@ const AllNumbersPage = () => {
         filters={filters}
         loading={loading}
         pagination={pagination}
-        onPageChange={(page) => setPagination((prev) => ({ ...prev, page }))}
-        onPageSizeChange={(pageSize) =>
-          setPagination((prev) => ({ ...prev, pageSize, page: 1 }))
-        }
-        onFilter={setFilterValues}
+        onPageChange={(page) => {
+          console.log('🔍 FILTER DEBUG - Page changed to:', page);
+          setPagination((prev) => ({ ...prev, page }));
+          fetchData(filterValues, page);
+        }}
+        onPageSizeChange={(pageSize) => {
+          console.log('🔍 FILTER DEBUG - Page size changed to:', pageSize);
+          setPagination((prev) => ({ ...prev, pageSize, page: 1 }));
+          fetchData(filterValues, 1);
+        }}
+        onFilter={(newFilters) => {
+          console.log('🔍 FILTER DEBUG - Filter changed:', newFilters);
+          console.log('🔍 FILTER DEBUG - Current filterValues before update:', filterValues);
+          setFilterValues(newFilters);
+          // Reset to page 1 when filters change
+          setPagination((prev) => ({ ...prev, page: 1 }));
+          // Fetch data with new filters immediately
+          fetchData(newFilters, 1);
+        }}
         onExport={handleExport}
         enableExport={true}
         emptyMessage="No phone numbers found. Generate some numbers to get started."

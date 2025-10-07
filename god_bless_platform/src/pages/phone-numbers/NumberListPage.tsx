@@ -200,6 +200,23 @@ export function NumberListPage() {
             >
               Generate Numbers
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                console.log('🔍 TEST - Current filters:', filters)
+                console.log('🔍 TEST - Project ID:', projectId)
+                // Test with specific filters
+                const testFilters = {
+                  ...filters,
+                  isValid: true,
+                  carrier: 'AT&T'
+                }
+                console.log('🔍 TEST - Testing with filters:', testFilters)
+                setFilters(testFilters)
+              }}
+            >
+              Test Filters
+            </Button>
           </div>
         </div>
 
