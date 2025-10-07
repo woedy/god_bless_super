@@ -1640,15 +1640,34 @@ def export_phone_numbers_view(request):
     if not include_invalid:
         queryset = queryset.filter(valid_number=True)
     
-    # Apply filters
+    # Apply filters (same as list view for consistency)
+    if filters.get('search'):
+        queryset = queryset.filter(
+            Q(phone_number__icontains=filters['search'])
+        )
+    
+    if filters.get('valid_number') is not None:
+        if str(filters['valid_number']).lower() == 'true':
+            queryset = queryset.filter(valid_number=True)
+        elif str(filters['valid_number']).lower() == 'false':
+            queryset = queryset.filter(valid_number=False)
+        elif str(filters['valid_number']).lower() == 'null':
+            queryset = queryset.filter(valid_number__isnull=True)
+    
     if filters.get('carrier'):
-        queryset = queryset.filter(carrier=filters['carrier'])
+        queryset = queryset.filter(carrier__icontains=filters['carrier'])
+    
     if filters.get('type'):
-        queryset = queryset.filter(type=filters['type'])
+        queryset = queryset.filter(type__iexact=filters['type'])
+    
+    if filters.get('country_name'):
+        queryset = queryset.filter(country_name__icontains=filters['country_name'])
+    
     if filters.get('area_code'):
         queryset = queryset.filter(area_code=filters['area_code'])
-    if filters.get('valid_number') is not None:
-        queryset = queryset.filter(valid_number=filters['valid_number'])
+
+    print(f"DEBUG - Export filters applied: {filters}")
+    print(f"DEBUG - Export queryset count: {queryset.count()}")
 
     total_count = queryset.count()
 

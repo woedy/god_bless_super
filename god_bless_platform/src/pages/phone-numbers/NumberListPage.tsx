@@ -191,9 +191,21 @@ export function NumberListPage() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => setShowExportDialog(true)}
+              onClick={() => {
+                console.log('🔍 Export button clicked - Current filters:', filters)
+                setShowExportDialog(true)
+              }}
             >
               Export Numbers
+              {Object.keys(filters).filter(key => 
+                key !== 'projectId' && 
+                filters[key as keyof NumberFilters] !== undefined && 
+                filters[key as keyof NumberFilters] !== ''
+              ).length > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 text-xs bg-blue-100 text-blue-800 rounded">
+                  Filtered
+                </span>
+              )}
             </Button>
             <Button
               onClick={() => navigate(`/phone-numbers/generate?project=${projectId}`)}

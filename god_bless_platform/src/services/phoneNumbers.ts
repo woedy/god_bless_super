@@ -427,7 +427,8 @@ class PhoneNumberServiceClass {
    * Initiates a background task for file generation
    */
   async exportNumbers(params: ExportParams): Promise<ApiResponse<ExportResponse>> {
-    console.log('PhoneNumberService - Exporting numbers:', params)
+    console.log('🔍 PhoneNumberService - Exporting numbers with params:', params)
+    console.log('🔍 PhoneNumberService - Export filters received:', params.filters)
     
     // Get user ID from localStorage
     const userData = localStorage.getItem('god_bless_user_data')
@@ -458,11 +459,15 @@ class PhoneNumberServiceClass {
       requestData.fields = params.customFields
     }
 
-    // Add filters - map frontend field names to backend field names
+    // Add filters - map frontend field names to backend field names (same as list method)
     if (params.filters) {
       const filterObj: Record<string, unknown> = {}
       
-      if (params.filters.isValid !== undefined) filterObj.valid_number = params.filters.isValid
+      // Handle validation status filter (convert boolean to string like list method)
+      if (params.filters.isValid !== undefined) {
+        filterObj.valid_number = params.filters.isValid.toString()
+      }
+      
       if (params.filters.carrier) filterObj.carrier = params.filters.carrier
       if (params.filters.country) filterObj.country_name = params.filters.country
       if (params.filters.lineType) filterObj.type = params.filters.lineType
@@ -470,12 +475,15 @@ class PhoneNumberServiceClass {
       if (params.filters.search) filterObj.search = params.filters.search
       if (params.filters.areaCode) filterObj.area_code = params.filters.areaCode
       
+      console.log('🔍 PhoneNumberService - Export filters:', filterObj)
       requestData.filters = filterObj
     }
 
+    console.log('🔍 PhoneNumberService - Final export request data:', requestData)
+    
     const response = await apiClient.post<ExportResponse>('/phone-generator/export/', requestData)
     
-    console.log('PhoneNumberService - Export response:', response)
+    console.log('🔍 PhoneNumberService - Export response:', response)
     console.log('PhoneNumberService - Response success:', response.success)
     console.log('PhoneNumberService - Response data keys:', response.data ? Object.keys(response.data) : 'No data')
     console.log('PhoneNumberService - Has content field:', response.data && 'content' in response.data)
