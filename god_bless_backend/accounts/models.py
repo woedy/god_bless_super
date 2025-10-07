@@ -103,6 +103,11 @@ class User(AbstractBaseUser):
     country = models.CharField(max_length=255, null=True, blank=True)
     language = models.CharField(default="English", max_length=255, null=True, blank=True)
 
+    # Enhanced theme and notification preferences
+    theme_preference = models.CharField(max_length=10, default='light', choices=[('light', 'Light'), ('dark', 'Dark')])
+    notification_preferences = models.JSONField(default=dict, blank=True)
+    api_rate_limit = models.IntegerField(default=1000)
+    last_activity = models.DateTimeField(auto_now=True)
 
   
     location_name = models.CharField(max_length=200, null=True, blank=True)
@@ -173,10 +178,8 @@ pre_save.connect(pre_save_user_id_receiver, sender=User)
 
 
 
-class UserAPIKey(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_apis')
-    abstract_api_key = models.CharField(max_length=5000, unique=True)
-    quality_api_key = models.CharField(max_length=5000, unique=True)
+# UserAPIKey model removed - external API validation no longer used
+# All validation now uses internal database validation exclusively
 
 
 
@@ -201,3 +204,35 @@ class UserSubscription(models.Model):
 
     def __str__(self):
         return f"Subscription for {self.user.username} ({'Active' if self.is_active else 'Inactive'})"
+
+
+class SystemSettings(models.Model):
+    """User-specific system configuration settings"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='system_settings')
+    
+    # SMTP and Proxy rotation settings
+    smtp_rotation_enabled = models.BooleanField(default=True)
+    proxy_rotation_enabled = models.BooleanField(default=True)
+    
+    # Delivery delay settings
+    delivery_delay_min = models.IntegerField(default=1, help_text="Minimum delay in seconds")
+    delivery_delay_max = models.IntegerField(default=5, help_text="Maximum delay in seconds")
+    delivery_delay_seed = models.IntegerField(null=True, blank=True, help_text="Random seed for delay generation")
+    
+    # Batch processing settings
+    batch_size = models.IntegerField(default=100, help_text="Default batch size for bulk operations")
+    
+    # Rate limiting settings
+    sms_rate_limit_per_minute = models.IntegerField(default=10, help_text="SMS sending rate limit per minute")
+    carrier_specific_rate_limits = models.JSONField(default=dict, blank=True, help_text="Carrier-specific rate limits")
+    
+    # Created and updated timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    def __str__(self):
+        return f"Settings for {self.user.username}"
+    
+    class Meta:
+        verbose_name = "System Settings"
+        verbose_name_plural = "System Settings"

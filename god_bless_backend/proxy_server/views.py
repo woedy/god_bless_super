@@ -1,74 +1,296 @@
-import requests
-from django.http import JsonResponse
-from django.shortcuts import render
-from django.conf import settings
-from django.http import JsonResponse
-import requests
-import json
-import os
+"""
+Proxy Server Management Views
+"""
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
+from rest_framework.authentication import TokenAuthentication
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from django.contrib.auth import get_user_model
+
+from .models import ProxyServer, RotationSettings
+from .serializers import ProxyServerSerializer, RotationSettingsSerializer
+from .rotation_service import ProxyRotationService
+from .delivery_delay_service import DeliveryDelayService
+
+User = get_user_model()
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def add_proxy_view(request):
+    """Add a new proxy server"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.data.get('user_id', '')
+    host = request.data.get('host', '')
+    port = request.data.get('port', '')
+    username = request.data.get('username', '')
+    password = request.data.get('password', '')
+    protocol = request.data.get('protocol', 'http')
+    
+    # Validate input
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    if not host:
+        errors['host'] = ['Host is required.']
+    if not port:
+        errors['port'] = ['Port is required.']
+    
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Create proxy
+    proxy = ProxyServer.objects.create(
+        user=user,
+        host=host,
+        port=int(port),
+        username=username if username else None,
+        password=password if password else None,
+        protocol=protocol
+    )
+    
+    serializer = ProxyServerSerializer(proxy)
+    payload['message'] = 'Successful'
+    payload['data'] = serializer.data
+    
+    return Response(payload, status=status.HTTP_201_CREATED)
 
 
-# Define the path to save the cookies log
-COOKIES_LOG_PATH = "cookies_log.txt"
-
-def save_cookies_to_file(cookies):
-    """ Save captured cookies to a text file for later inspection """
-    with open(COOKIES_LOG_PATH, "a") as f:
-        # Format cookies as a JSON string to make it human-readable
-        f.write(json.dumps(cookies, indent=4))
-        f.write("\n" + "="*80 + "\n")  # Separator for clarity
-
-def submit_login(request):
-    # Step 1: Handle the login request (username and password)
-    data = request.json()  # Get JSON body with username and password
-    username = data.get("username")
-    password = data.get("password")
-
-    # Simulate sending these credentials to the real website's login endpoint
-    real_site_login_url = "https://real-website.com/login"
-    response = requests.post(real_site_login_url, data={'username': username, 'password': password})
-
-    if response.status_code == 200:
-        # Step 2: Check if 2FA is required
-        if "2FA required" in response.text:
-            return JsonResponse({"requires_2fa": True})
-
-        # Step 3: If login is successful without 2FA, return cookies and redirect URL
-        cookies = response.cookies.get_dict()
-        redirect_url = "https://real-website.com/dashboard"  # The real website's dashboard
-
-        # Save cookies to file
-        save_cookies_to_file(cookies)
-
-        return JsonResponse({"redirect_url": redirect_url, "cookies": cookies})
-
-    return JsonResponse({"error": "Invalid login credentials."}, status=400)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_proxies_view(request):
+    """Get all proxies for a user"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.query_params.get('user_id', None)
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+    
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    proxies = ProxyServer.objects.filter(user=user, is_archived=False).order_by('-created_at')
+    serializer = ProxyServerSerializer(proxies, many=True)
+    
+    payload['message'] = 'Successful'
+    payload['data'] = {'proxies': serializer.data}
+    
+    return Response(payload, status=status.HTTP_200_OK)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def delete_proxy_view(request):
+    """Delete a proxy server"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.data.get('user_id', '')
+    proxy_id = request.data.get('id', '')
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    if not proxy_id:
+        errors['id'] = ['Proxy ID is required.']
+    
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+        proxy = ProxyServer.objects.get(id=proxy_id, user=user)
+        proxy.delete()
+        
+        payload['message'] = 'Successful'
+        payload['data'] = {}
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+    except ProxyServer.DoesNotExist:
+        errors['id'] = ['Proxy does not exist.']
+    
+    payload['message'] = 'Errors'
+    payload['errors'] = errors
+    return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def check_proxy_health_view(request):
+    """Check health of a specific proxy"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.data.get('user_id', '')
+    proxy_id = request.data.get('proxy_id', '')
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    if not proxy_id:
+        errors['proxy_id'] = ['Proxy ID is required.']
+    
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+        proxy = ProxyServer.objects.get(id=proxy_id, user=user)
+        
+        rotation_service = ProxyRotationService(user)
+        is_healthy = rotation_service.check_proxy_health(proxy)
+        
+        payload['message'] = 'Successful'
+        payload['data'] = {
+            'proxy_id': proxy.id,
+            'is_healthy': is_healthy,
+            'health_check_failures': proxy.health_check_failures
+        }
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+    except ProxyServer.DoesNotExist:
+        errors['proxy_id'] = ['Proxy does not exist.']
+    
+    payload['message'] = 'Errors'
+    payload['errors'] = errors
+    return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
-def submit_2fa(request):
-    # Step 1: Handle the 2FA code submission
-    data = request.json()
-    username = data.get("username")
-    password = data.get("password")
-    twofa_code = data.get("twofaCode")
 
-    # Simulate sending the login + 2FA code to the real website's 2FA validation endpoint
-    real_site_2fa_url = "https://real-website.com/2fa"
-    response = requests.post(real_site_2fa_url, data={'username': username, 'password': password, '2fa_code': twofa_code})
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def check_all_proxies_health_view(request):
+    """Check health of all user's proxies"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.data.get('user_id', '')
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+        rotation_service = ProxyRotationService(user)
+        results = rotation_service.check_all_proxies_health()
+        
+        payload['message'] = 'Successful'
+        payload['data'] = {'health_checks': results}
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
-    if response.status_code == 200:
-        # Step 2: If 2FA is valid, return session cookies and redirect URL
-        cookies = response.cookies.get_dict()
-        redirect_url = "https://real-website.com/dashboard"
 
-        # Save cookies to file
-        save_cookies_to_file(cookies)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_proxy_rotation_stats_view(request):
+    """Get proxy rotation statistics"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.query_params.get('user_id', None)
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+        rotation_service = ProxyRotationService(user)
+        stats = rotation_service.get_rotation_stats()
+        
+        payload['message'] = 'Successful'
+        payload['data'] = stats
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
-        return JsonResponse({"redirect_url": redirect_url, "cookies": cookies})
 
-    return JsonResponse({"error": "Invalid 2FA code."}, status=400)
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def rotation_settings_view(request):
+    """Get or update rotation settings"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.data.get('user_id') if request.method == 'POST' else request.query_params.get('user_id')
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    settings_obj, created = RotationSettings.objects.get_or_create(user=user)
+    
+    if request.method == 'GET':
+        serializer = RotationSettingsSerializer(settings_obj)
+        payload['message'] = 'Successful'
+        payload['data'] = serializer.data
+        return Response(payload, status=status.HTTP_200_OK)
+    
+    elif request.method == 'POST':
+        serializer = RotationSettingsSerializer(settings_obj, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            payload['message'] = 'Successful'
+            payload['data'] = serializer.data
+            return Response(payload, status=status.HTTP_200_OK)
+        else:
+            payload['message'] = 'Errors'
+            payload['errors'] = serializer.errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)

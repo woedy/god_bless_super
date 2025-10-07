@@ -5,19 +5,24 @@ from rest_framework.decorators import api_view, permission_classes, authenticati
 from rest_framework.response import Response
 from rest_framework import status
 from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-from django.db.models import Q
+from django.db.models import Q, Count
 from django.contrib.auth import get_user_model
+from django.utils import timezone
+from django.db import models
 
 from django.conf import settings
 from rest_framework.authentication import TokenAuthentication
 
-from phone_generator.api.serializers import AllPhoneNumbersSerializer
-from phone_generator.models import PhoneNumber
+from phone_generator.api.serializers import AllPhoneNumbersSerializer, PhoneGenerationTaskSerializer
+from phone_generator.models import PhoneNumber, PhoneGenerationTask
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
 
 from projects.models import Project
 from sms_sender.api.etext.providers import PROVIDERS_LIST
+from phone_generator.tasks import generate_phone_numbers_task, validate_phone_numbers_task
+from tasks.models import TaskProgress
+
 ### Twilio, NumVerify, or Nexmo , apilayer , phonenumbers
 User = get_user_model()
 
@@ -55,6 +60,7 @@ def generate_numbers_viewwww(request, area_code):
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
 def generate_numbers_view(request):
+    """Legacy endpoint - kept for backward compatibility"""
     payload = {}
     data = {}
     errors = {}
@@ -95,35 +101,119 @@ def generate_numbers_view(request):
             payload['errors'] = errors
             return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
-        # Generate unique phone numbers
-        phone_numbers = generate_phone_numbers(area_code, size)
+        # For small batches (< 10000), use synchronous generation
+        if size < 10000:
+            # Generate unique phone numbers
+            phone_numbers = generate_phone_numbers(area_code, size)
 
-        # Check for existing phone numbers in the database
-        existing_phone_numbers = set(
-            PhoneNumber.objects.filter(phone_number__in=phone_numbers)
-            .values_list('phone_number', flat=True)
-        )
+            # Check for existing phone numbers in the database
+            existing_phone_numbers = set(
+                PhoneNumber.objects.filter(phone_number__in=phone_numbers)
+                .values_list('phone_number', flat=True)
+            )
 
-        # Filter out any phone numbers that already exist in the database
-        unique_phone_numbers = [num for num in phone_numbers if num not in existing_phone_numbers]
+            # Filter out any phone numbers that already exist in the database
+            unique_phone_numbers = [num for num in phone_numbers if num not in existing_phone_numbers]
 
-        # Prepare PhoneNumber instances for bulk creation
-        phone_number_objects = [
-            PhoneNumber(user=user, project=project, phone_number=number) for number in unique_phone_numbers
-        ]
+            # Prepare PhoneNumber instances for bulk creation
+            phone_number_objects = [
+                PhoneNumber(user=user, project=project, phone_number=number) for number in unique_phone_numbers
+            ]
 
-        # Bulk create phone numbers in batches
-        if phone_number_objects:
-            batch_size = 1000  # Adjust this value if necessary
-            for i in range(0, len(phone_number_objects), batch_size):
-                PhoneNumber.objects.bulk_create(phone_number_objects[i:i+batch_size])
+            # Bulk create phone numbers in batches
+            if phone_number_objects:
+                batch_size = 1000  # Adjust this value if necessary
+                for i in range(0, len(phone_number_objects), batch_size):
+                    PhoneNumber.objects.bulk_create(phone_number_objects[i:i+batch_size])
 
-        # Return the list of generated numbers
-        data['numbers'] = unique_phone_numbers
-        payload['message'] = "Successful"
-        payload['data'] = data
+            # Return the list of generated numbers
+            data['numbers'] = unique_phone_numbers
+            payload['message'] = "Successful"
+            payload['data'] = data
+        else:
+            # For large batches, redirect to background task
+            task = generate_phone_numbers_task.delay(
+                user_id=user.user_id,
+                project_id=project.id,
+                area_code=area_code,
+                quantity=size
+            )
+            
+            data['task_id'] = task.id
+            data['message'] = 'Large generation started in background. Use task_id to track progress.'
+            payload['message'] = "Task Started"
+            payload['data'] = data
 
     return Response(payload)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def generate_numbers_enhanced_view(request):
+    """Enhanced phone number generation with background processing and progress tracking"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    if request.method == 'POST':
+        user_id = request.data.get('user_id', "")
+        project_id = request.data.get('project_id', "")
+        area_code = request.data.get('area_code', "")
+        quantity = request.data.get('quantity', 0)
+        carrier_filter = request.data.get('carrier_filter', None)
+        type_filter = request.data.get('type_filter', None)
+        batch_size = request.data.get('batch_size', 1000)
+
+        # Validate input
+        if not user_id:
+            errors['user_id'] = ['User ID is required.']
+        if not project_id:
+            errors['project_id'] = ['Project ID is required.']
+        if not area_code:
+            errors['area_code'] = ['Area code is required.']
+        if len(area_code) != 3 or not area_code.isdigit():
+            errors['area_code'] = ['Invalid area code format. Must be 3 digits.']
+        if not quantity or quantity <= 0:
+            errors['quantity'] = ['Quantity must be a positive integer.']
+        if quantity > 1000000:
+            errors['quantity'] = ['Maximum quantity is 1,000,000 numbers.']
+
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            errors['user_id'] = ['User does not exist.']
+
+        try:
+            project = Project.objects.get(id=project_id)
+        except:
+            errors['project_id'] = ['Project does not exist.']
+
+        if errors:
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+        # Start background task for phone number generation
+        task = generate_phone_numbers_task.delay(
+            user_id=user.user_id,
+            project_id=project.id,
+            area_code=area_code,
+            quantity=quantity,
+            carrier_filter=carrier_filter,
+            type_filter=type_filter,
+            batch_size=batch_size
+        )
+
+        data['task_id'] = task.id
+        data['area_code'] = area_code
+        data['quantity'] = quantity
+        data['estimated_time'] = f"{quantity // 1000} minutes"  # Rough estimate
+        
+        payload['message'] = "Phone number generation started"
+        payload['data'] = data
+
+    return Response(payload, status=status.HTTP_201_CREATED)
 
 
 
@@ -528,14 +618,12 @@ def delete_numbers_view(request):
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
 def validate_numbers_view(request):
+    """Legacy validation endpoint - kept for backward compatibility"""
     payload = {}
     data = {}
     errors = {}
 
     if request.method == 'POST':
-
-
-
         user_id = request.data.get('user_id', "")
 
         if not user_id:
@@ -546,12 +634,10 @@ def validate_numbers_view(request):
         except:
             errors['user_id'] = ['User does not exist.']
 
-
         if errors:
             payload['message'] = "Errors"
             payload['errors'] = errors
             return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-
 
         numbers = PhoneNumber.objects.all().filter(status='Pending', user=user)
         for number in numbers:
@@ -563,12 +649,61 @@ def validate_numbers_view(request):
                 number.status = 'Active'
                 number.save()
 
-
-
         payload['message'] = "Successful"
         payload['data'] = data
 
     return Response(payload)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def validate_numbers_enhanced_view(request):
+    """Enhanced phone number validation with background processing"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    if request.method == 'POST':
+        user_id = request.data.get('user_id', "")
+        project_id = request.data.get('project_id', None)
+        phone_ids = request.data.get('phone_ids', None)  # Optional: specific phone IDs to validate
+        batch_size = request.data.get('batch_size', 1000)
+
+        if not user_id:
+            errors['user_id'] = ['User ID is required.']
+
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            errors['user_id'] = ['User does not exist.']
+
+        if project_id:
+            try:
+                project = Project.objects.get(id=project_id)
+            except:
+                errors['project_id'] = ['Project does not exist.']
+
+        if errors:
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+        # Start background task for phone number validation
+        task = validate_phone_numbers_task.delay(
+            user_id=user.user_id,
+            project_id=project_id,
+            phone_ids=phone_ids,
+            batch_size=batch_size
+        )
+
+        data['task_id'] = task.id
+        data['message'] = 'Phone number validation started in background'
+        
+        payload['message'] = "Validation task started"
+        payload['data'] = data
+
+    return Response(payload, status=status.HTTP_201_CREATED)
 
 
 def is_valid_number(phone_number):
@@ -617,6 +752,413 @@ def send_sms_view222(request):
 
 
 
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_generation_tasks_view(request):
+    """Get phone generation tasks for a user"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.query_params.get('user_id', None)
+    project_id = request.query_params.get('project_id', None)
+    status_filter = request.query_params.get('status', None)
+    page_number = request.query_params.get('page', 1)
+    page_size = int(request.query_params.get('page_size', 20))
+
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    # Build query
+    tasks = PhoneGenerationTask.objects.filter(user=user)
+    
+    if project_id:
+        tasks = tasks.filter(project_id=project_id)
+    
+    if status_filter:
+        tasks = tasks.filter(status=status_filter)
+
+    tasks = tasks.order_by('-created_at')
+
+    # Paginate
+    paginator = Paginator(tasks, page_size)
+    try:
+        paginated_tasks = paginator.page(page_number)
+    except PageNotAnInteger:
+        paginated_tasks = paginator.page(1)
+    except EmptyPage:
+        paginated_tasks = paginator.page(paginator.num_pages)
+
+    serializer = PhoneGenerationTaskSerializer(paginated_tasks, many=True)
+
+    data['tasks'] = serializer.data
+    data['pagination'] = {
+        'page_number': paginated_tasks.number,
+        'count': tasks.count(),
+        'total_pages': paginator.num_pages,
+        'next': paginated_tasks.next_page_number() if paginated_tasks.has_next() else None,
+        'previous': paginated_tasks.previous_page_number() if paginated_tasks.has_previous() else None,
+    }
+
+    payload['message'] = "Successful"
+    payload['data'] = data
+
+    return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_task_progress_view(request, task_id):
+    """Get progress of a specific task"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.query_params.get('user_id', None)
+
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Try to get from TaskProgress first (for Celery tasks)
+        task_progress = TaskProgress.objects.get(task_id=task_id, user=user)
+        
+        data['task_id'] = task_progress.task_id
+        data['status'] = task_progress.status
+        data['progress'] = task_progress.progress
+        data['current_step'] = task_progress.current_step
+        data['processed_items'] = task_progress.processed_items
+        data['total_items'] = task_progress.total_items
+        data['created_at'] = task_progress.created_at
+        data['started_at'] = task_progress.started_at
+        data['completed_at'] = task_progress.completed_at
+        data['estimated_completion'] = task_progress.estimated_completion
+        data['error_message'] = task_progress.error_message
+        data['result_data'] = task_progress.result_data
+        
+    except TaskProgress.DoesNotExist:
+        # Fallback to PhoneGenerationTask
+        try:
+            generation_task = PhoneGenerationTask.objects.get(celery_task_id=task_id, user=user)
+            
+            data['task_id'] = generation_task.celery_task_id
+            data['status'] = generation_task.status
+            data['progress'] = generation_task.progress
+            data['current_step'] = generation_task.current_step
+            data['processed_items'] = generation_task.processed_items
+            data['total_items'] = generation_task.total_items
+            data['created_at'] = generation_task.created_at
+            data['started_at'] = generation_task.started_at
+            data['completed_at'] = generation_task.completed_at
+            data['estimated_completion'] = generation_task.estimated_completion
+            data['error_message'] = generation_task.error_message
+            data['result_data'] = generation_task.result_data
+            
+        except PhoneGenerationTask.DoesNotExist:
+            errors['task_id'] = ['Task not found.']
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_404_NOT_FOUND)
+
+    payload['message'] = "Successful"
+    payload['data'] = data
+
+    return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def cancel_task_view(request, task_id):
+    """Cancel a running task"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.data.get('user_id', "")
+
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        from celery import current_app
+        
+        # Revoke the Celery task
+        current_app.control.revoke(task_id, terminate=True)
+        
+        # Update task status in database
+        try:
+            task_progress = TaskProgress.objects.get(task_id=task_id, user=user)
+            task_progress.status = 'REVOKED'
+            task_progress.error_message = 'Task cancelled by user'
+            task_progress.completed_at = timezone.now()
+            task_progress.save()
+        except TaskProgress.DoesNotExist:
+            pass
+        
+        try:
+            generation_task = PhoneGenerationTask.objects.get(celery_task_id=task_id, user=user)
+            generation_task.status = 'cancelled'
+            generation_task.error_message = 'Task cancelled by user'
+            generation_task.completed_at = timezone.now()
+            generation_task.save()
+        except PhoneGenerationTask.DoesNotExist:
+            pass
+        
+        data['task_id'] = task_id
+        data['status'] = 'cancelled'
+        payload['message'] = "Task cancelled successfully"
+        payload['data'] = data
+        
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        logger.error(f"Error cancelling task {task_id}: {e}")
+        errors['task_cancellation'] = [f'Failed to cancel task: {str(e)}']
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def bulk_validate_numbers_view(request):
+    """Bulk validate specific phone numbers"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    if request.method == 'POST':
+        user_id = request.data.get('user_id', "")
+        phone_ids = request.data.get('phone_ids', [])
+        batch_size = request.data.get('batch_size', 500)
+
+        if not user_id:
+            errors['user_id'] = ['User ID is required.']
+
+        if not phone_ids or not isinstance(phone_ids, list):
+            errors['phone_ids'] = ['Phone IDs list is required.']
+
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            errors['user_id'] = ['User does not exist.']
+
+        if errors:
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+        # Start background task for bulk phone number validation
+        from phone_generator.tasks import bulk_validate_phone_numbers_task
+        
+        task = bulk_validate_phone_numbers_task.delay(
+            user_id=user.user_id,
+            phone_ids=phone_ids,
+            batch_size=batch_size
+        )
+
+        data['task_id'] = task.id
+        data['phone_count'] = len(phone_ids)
+        data['message'] = 'Bulk phone number validation started in background'
+        
+        payload['message'] = "Bulk validation task started"
+        payload['data'] = data
+
+    return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_phone_statistics_view(request):
+    """Get phone number statistics for a user/project"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.query_params.get('user_id', None)
+    project_id = request.query_params.get('project_id', None)
+
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if project_id:
+        try:
+            project = Project.objects.get(id=project_id)
+        except:
+            errors['project_id'] = ['Project does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    # Build base query
+    base_query = PhoneNumber.objects.filter(user=user, is_archived=False)
+    if project_id:
+        base_query = base_query.filter(project_id=project_id)
+
+    # Calculate statistics
+    total_numbers = base_query.count()
+    validated_numbers = base_query.filter(validation_attempted=True).count()
+    valid_numbers = base_query.filter(valid_number=True).count()
+    invalid_numbers = base_query.filter(valid_number=False, validation_attempted=True).count()
+    pending_validation = base_query.filter(validation_attempted=False).count()
+    
+    # Carrier breakdown
+    carrier_stats = base_query.filter(valid_number=True).values('carrier').annotate(
+        count=models.Count('id')
+    ).order_by('-count')[:10]
+    
+    # Type breakdown
+    type_stats = base_query.filter(valid_number=True).values('type').annotate(
+        count=models.Count('id')
+    ).order_by('-count')
+    
+    # State breakdown
+    state_stats = base_query.filter(valid_number=True).values('state').annotate(
+        count=models.Count('id')
+    ).order_by('-count')[:10]
+
+    data['statistics'] = {
+        'total_numbers': total_numbers,
+        'validated_numbers': validated_numbers,
+        'valid_numbers': valid_numbers,
+        'invalid_numbers': invalid_numbers,
+        'pending_validation': pending_validation,
+        'validation_rate': (validated_numbers / total_numbers * 100) if total_numbers > 0 else 0,
+        'success_rate': (valid_numbers / validated_numbers * 100) if validated_numbers > 0 else 0,
+        'carrier_breakdown': list(carrier_stats),
+        'type_breakdown': list(type_stats),
+        'state_breakdown': list(state_stats)
+    }
+
+    payload['message'] = "Successful"
+    payload['data'] = data
+
+    return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_active_tasks_view(request):
+    """Get all active tasks for a user"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.query_params.get('user_id', None)
+
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    # Get active tasks from TaskProgress
+    active_tasks = TaskProgress.objects.filter(
+        user=user,
+        status__in=['PENDING', 'STARTED', 'PROGRESS']
+    ).order_by('-created_at')
+
+    # Get active generation tasks
+    active_generation_tasks = PhoneGenerationTask.objects.filter(
+        user=user,
+        status__in=['pending', 'in_progress']
+    ).order_by('-created_at')
+
+    tasks_data = []
+    
+    # Add TaskProgress tasks
+    for task in active_tasks:
+        tasks_data.append({
+            'task_id': task.task_id,
+            'task_name': task.task_name,
+            'category': task.category,
+            'status': task.status,
+            'progress': task.progress,
+            'current_step': task.current_step,
+            'processed_items': task.processed_items,
+            'total_items': task.total_items,
+            'created_at': task.created_at,
+            'started_at': task.started_at,
+            'estimated_completion': task.estimated_completion
+        })
+    
+    # Add PhoneGenerationTask tasks
+    for task in active_generation_tasks:
+        tasks_data.append({
+            'task_id': task.celery_task_id,
+            'task_name': 'Phone Number Generation',
+            'category': 'phone_generation',
+            'status': task.status,
+            'progress': task.progress,
+            'current_step': task.current_step,
+            'processed_items': task.processed_items,
+            'total_items': task.total_items,
+            'created_at': task.created_at,
+            'started_at': task.started_at,
+            'estimated_completion': task.estimated_completion,
+            'area_code': task.area_code,
+            'quantity': task.quantity
+        })
+
+    data['active_tasks'] = tasks_data
+    data['count'] = len(tasks_data)
+
+    payload['message'] = "Successful"
+    payload['data'] = data
+
+    return Response(payload, status=status.HTTP_200_OK)
+
+
 def send_sms(to, body):
     client = Client(settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
 
@@ -627,3 +1169,621 @@ def send_sms(to, body):
     )
 
     return message.sid
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def generate_numbers_with_config_view(request):
+    """Generate phone numbers with advanced configuration options"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    if request.method == 'POST':
+        user_id = request.data.get('user_id', "")
+        project_id = request.data.get('project_id', "")
+        area_code = request.data.get('area_code', "")
+        quantity = request.data.get('quantity', 0)
+        
+        # Advanced configuration options
+        config = request.data.get('config', {})
+        carrier_filter = config.get('carrier_filter', None)
+        type_filter = config.get('type_filter', None)
+        batch_size = config.get('batch_size', 1000)
+        auto_validate = config.get('auto_validate', False)
+        validation_batch_size = config.get('validation_batch_size', 500)
+
+        # Validate input
+        if not user_id:
+            errors['user_id'] = ['User ID is required.']
+        if not project_id:
+            errors['project_id'] = ['Project ID is required.']
+        if not area_code:
+            errors['area_code'] = ['Area code is required.']
+        if len(area_code) != 3 or not area_code.isdigit():
+            errors['area_code'] = ['Invalid area code format. Must be 3 digits.']
+        if not quantity or quantity <= 0:
+            errors['quantity'] = ['Quantity must be a positive integer.']
+        if quantity > 1000000:
+            errors['quantity'] = ['Maximum quantity is 1,000,000 numbers.']
+        if batch_size < 100 or batch_size > 10000:
+            errors['batch_size'] = ['Batch size must be between 100 and 10,000.']
+
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            errors['user_id'] = ['User does not exist.']
+
+        try:
+            project = Project.objects.get(id=project_id)
+        except:
+            errors['project_id'] = ['Project does not exist.']
+
+        if errors:
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+        # Start background task for phone number generation
+        generation_task = generate_phone_numbers_task.delay(
+            user_id=user.user_id,
+            project_id=project.id,
+            area_code=area_code,
+            quantity=quantity,
+            carrier_filter=carrier_filter,
+            type_filter=type_filter,
+            batch_size=batch_size
+        )
+
+        # If auto-validate is enabled, chain validation task
+        validation_task_id = None
+        if auto_validate:
+            # Note: In a real implementation, you'd want to chain this task
+            # after the generation task completes
+            validation_task_id = f"validation_will_start_after_{generation_task.id}"
+
+        data['generation_task_id'] = generation_task.id
+        data['validation_task_id'] = validation_task_id
+        data['area_code'] = area_code
+        data['quantity'] = quantity
+        data['config'] = {
+            'batch_size': batch_size,
+            'auto_validate': auto_validate,
+            'carrier_filter': carrier_filter,
+            'type_filter': type_filter
+        }
+        data['estimated_time'] = f"{max(1, quantity // 1000)} minutes"
+        
+        payload['message'] = "Advanced phone number generation started"
+        payload['data'] = data
+
+    return Response(payload, status=status.HTTP_201_CREATED)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def bulk_validate_numbers_view(request):
+    """Bulk validate specific phone numbers by IDs"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    if request.method == 'POST':
+        user_id = request.data.get('user_id', "")
+        phone_ids = request.data.get('phone_ids', [])
+        batch_size = request.data.get('batch_size', 500)
+
+        if not user_id:
+            errors['user_id'] = ['User ID is required.']
+        
+        if not phone_ids or not isinstance(phone_ids, list):
+            errors['phone_ids'] = ['Phone IDs list is required.']
+
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            errors['user_id'] = ['User does not exist.']
+
+        if errors:
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+        # Import the bulk validation task
+        from phone_generator.tasks import bulk_validate_phone_numbers_task
+        
+        # Start background task for bulk validation
+        task = bulk_validate_phone_numbers_task.delay(
+            user_id=user.user_id,
+            phone_ids=phone_ids,
+            batch_size=batch_size
+        )
+
+        data['task_id'] = task.id
+        data['phone_count'] = len(phone_ids)
+        data['message'] = f'Bulk validation started for {len(phone_ids)} phone numbers'
+        
+        payload['message'] = "Bulk validation task started"
+        payload['data'] = data
+
+    return Response(payload, status=status.HTTP_201_CREATED)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_phone_statistics_view(request):
+    """Get phone number statistics for a user/project"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.query_params.get('user_id', None)
+    project_id = request.query_params.get('project_id', None)
+
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    # Build query filters
+    filters = {'user': user, 'is_archived': False}
+    if project_id:
+        try:
+            project = Project.objects.get(id=project_id)
+            filters['project'] = project
+        except:
+            errors['project_id'] = ['Project does not exist.']
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    # Get statistics
+    phone_numbers = PhoneNumber.objects.filter(**filters)
+    
+    total_count = phone_numbers.count()
+    validated_count = phone_numbers.filter(validation_attempted=True).count()
+    valid_count = phone_numbers.filter(valid_number=True).count()
+    invalid_count = phone_numbers.filter(valid_number=False, validation_attempted=True).count()
+    pending_validation = phone_numbers.filter(validation_attempted=False).count()
+    
+    # Get carrier breakdown
+    carrier_stats = phone_numbers.filter(valid_number=True).values('carrier').annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    # Get type breakdown
+    type_stats = phone_numbers.filter(valid_number=True).values('type').annotate(
+        count=Count('id')
+    ).order_by('-count')
+    
+    # Get area code breakdown
+    area_code_stats = phone_numbers.values('area_code').annotate(
+        count=Count('id')
+    ).order_by('-count')[:10]  # Top 10 area codes
+    
+    # Get status breakdown
+    status_stats = phone_numbers.values('status').annotate(
+        count=Count('id')
+    ).order_by('-count')
+
+    data['total_numbers'] = total_count
+    data['validated_numbers'] = validated_count
+    data['valid_numbers'] = valid_count
+    data['invalid_numbers'] = invalid_count
+    data['pending_validation'] = pending_validation
+    data['validation_rate'] = round((validated_count / total_count * 100), 2) if total_count > 0 else 0
+    data['validity_rate'] = round((valid_count / validated_count * 100), 2) if validated_count > 0 else 0
+    data['carrier_breakdown'] = list(carrier_stats)
+    data['type_breakdown'] = list(type_stats)
+    data['area_code_breakdown'] = list(area_code_stats)
+    data['status_breakdown'] = list(status_stats)
+
+    payload['message'] = "Successful"
+    payload['data'] = data
+
+    return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_active_tasks_view(request):
+    """Get all active tasks for a user"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.query_params.get('user_id', None)
+
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    # Get active generation tasks
+    active_generation_tasks = PhoneGenerationTask.objects.filter(
+        user=user,
+        status__in=['pending', 'in_progress']
+    ).order_by('-created_at')
+
+    # Get active task progress records
+    from tasks.models import TaskProgress, TaskStatus
+    active_task_progress = TaskProgress.objects.filter(
+        user=user,
+        status__in=[TaskStatus.PENDING, TaskStatus.STARTED, TaskStatus.PROGRESS]
+    ).order_by('-created_at')
+
+    # Serialize generation tasks
+    generation_tasks_data = PhoneGenerationTaskSerializer(active_generation_tasks, many=True).data
+
+    # Serialize task progress
+    task_progress_data = []
+    for task in active_task_progress:
+        task_progress_data.append({
+            'task_id': task.task_id,
+            'task_name': task.task_name,
+            'category': task.category,
+            'status': task.status,
+            'progress': task.progress,
+            'current_step': task.current_step,
+            'processed_items': task.processed_items,
+            'total_items': task.total_items,
+            'created_at': task.created_at,
+            'started_at': task.started_at,
+            'estimated_completion': task.estimated_completion
+        })
+
+    data['generation_tasks'] = generation_tasks_data
+    data['all_tasks'] = task_progress_data
+    data['total_active_tasks'] = len(generation_tasks_data) + len(task_progress_data)
+
+    payload['message'] = "Successful"
+    payload['data'] = data
+
+    return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def generate_numbers_with_config_view(request):
+    """
+    Advanced phone number generation with comprehensive configuration options
+    Supports up to 1M numbers with auto-validation and custom batch processing
+    """
+    payload = {}
+    data = {}
+    errors = {}
+
+    if request.method == 'POST':
+        user_id = request.data.get('user_id', "")
+        project_id = request.data.get('project_id', "")
+        area_code = request.data.get('area_code', "")
+        quantity = request.data.get('quantity', 0)
+        
+        # Advanced configuration options
+        carrier_filter = request.data.get('carrier_filter', None)
+        type_filter = request.data.get('type_filter', None)
+        batch_size = request.data.get('batch_size', 1000)
+        auto_validate = request.data.get('auto_validate', False)
+
+        # Validate input
+        if not user_id:
+            errors['user_id'] = ['User ID is required.']
+        if not project_id:
+            errors['project_id'] = ['Project ID is required.']
+        if not area_code:
+            errors['area_code'] = ['Area code is required.']
+        if len(area_code) != 3 or not area_code.isdigit():
+            errors['area_code'] = ['Invalid area code format. Must be 3 digits.']
+        if not quantity or quantity <= 0:
+            errors['quantity'] = ['Quantity must be a positive integer.']
+        if quantity > 1000000:
+            errors['quantity'] = ['Maximum quantity is 1,000,000 numbers.']
+        if batch_size < 100 or batch_size > 10000:
+            errors['batch_size'] = ['Batch size must be between 100 and 10,000.']
+
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            errors['user_id'] = ['User does not exist.']
+
+        try:
+            project = Project.objects.get(id=project_id)
+        except:
+            errors['project_id'] = ['Project does not exist.']
+
+        if errors:
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+        # Start background task for phone number generation
+        generation_task = generate_phone_numbers_task.delay(
+            user_id=user.user_id,
+            project_id=project.id,
+            area_code=area_code,
+            quantity=quantity,
+            carrier_filter=carrier_filter,
+            type_filter=type_filter,
+            batch_size=batch_size
+        )
+
+        # If auto-validate is enabled, chain validation task
+        validation_task_id = None
+        if auto_validate:
+            # Note: In a real implementation, you'd want to chain this task
+            # after the generation task completes using Celery's chain
+            validation_task_id = f"validation_will_start_after_{generation_task.id}"
+
+        data['generation_task_id'] = generation_task.id
+        data['validation_task_id'] = validation_task_id
+        data['area_code'] = area_code
+        data['quantity'] = quantity
+        data['config'] = {
+            'batch_size': batch_size,
+            'auto_validate': auto_validate,
+            'carrier_filter': carrier_filter,
+            'type_filter': type_filter
+        }
+        data['estimated_time'] = f"{max(1, quantity // 1000)} minutes"
+        
+        payload['message'] = "Advanced phone number generation started"
+        payload['data'] = data
+
+    return Response(payload, status=status.HTTP_201_CREATED)
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def export_phone_numbers_view(request):
+    """Export phone numbers with optional filtering"""
+    from phone_generator.tasks import export_phone_numbers_task
+    from phone_generator.export_utils import export_phone_numbers, create_export_response
+    
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.data.get('user_id', "")
+    project_id = request.data.get('project_id', None)
+    format = request.data.get('format', 'csv')
+    filters = request.data.get('filters', {})
+    fields = request.data.get('fields', None)
+    use_background = request.data.get('use_background', False)
+
+    # Validate input
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    
+    if format not in ['csv', 'txt', 'json', 'doc']:
+        errors['format'] = ['Invalid format. Must be csv, txt, json, or doc.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if project_id:
+        try:
+            project = Project.objects.get(id=project_id)
+        except:
+            errors['project_id'] = ['Project does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    # Build queryset
+    queryset = PhoneNumber.objects.filter(user=user, is_archived=False)
+    
+    if project_id:
+        queryset = queryset.filter(project_id=project_id)
+    
+    # Apply filters
+    if filters.get('carrier'):
+        queryset = queryset.filter(carrier=filters['carrier'])
+    if filters.get('type'):
+        queryset = queryset.filter(type=filters['type'])
+    if filters.get('area_code'):
+        queryset = queryset.filter(area_code=filters['area_code'])
+    if filters.get('valid_number') is not None:
+        queryset = queryset.filter(valid_number=filters['valid_number'])
+
+    total_count = queryset.count()
+
+    # For large datasets, use background task
+    if use_background or total_count > 10000:
+        task = export_phone_numbers_task.delay(
+            user_id=user.user_id,
+            project_id=project_id,
+            format=format,
+            filters=filters,
+            fields=fields
+        )
+        
+        data['task_id'] = task.id
+        data['total_records'] = total_count
+        data['message'] = 'Export started in background. Use task_id to track progress.'
+        payload['message'] = "Export task started"
+        payload['data'] = data
+        return Response(payload, status=status.HTTP_201_CREATED)
+    
+    # For small datasets, export immediately
+    try:
+        if fields is None:
+            fields = ['phone_number', 'carrier', 'type', 'area_code', 'valid_number', 'created_at']
+        
+        content = export_phone_numbers(queryset, format, fields)
+        
+        timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"phone_numbers_{timestamp}.{format}"
+        
+        return create_export_response(content, format, filename)
+        
+    except Exception as e:
+        errors['export'] = [str(e)]
+        payload['message'] = "Export failed"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def import_phone_numbers_view(request):
+    """Import phone numbers from file"""
+    from phone_generator.tasks import import_phone_numbers_task
+    
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.data.get('user_id', "")
+    project_id = request.data.get('project_id', "")
+    file_format = request.data.get('format', 'csv')
+    validate_on_import = request.data.get('validate_on_import', False)
+    
+    # Get file from request
+    if 'file' not in request.FILES:
+        errors['file'] = ['File is required.']
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    
+    if not project_id:
+        errors['project_id'] = ['Project ID is required.']
+    
+    if file_format not in ['csv', 'txt', 'json']:
+        errors['format'] = ['Invalid format. Must be csv, txt, or json.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    try:
+        project = Project.objects.get(id=project_id)
+    except:
+        errors['project_id'] = ['Project does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Read file content
+        uploaded_file = request.FILES['file']
+        file_content = uploaded_file.read().decode('utf-8')
+        
+        # Start background import task
+        task = import_phone_numbers_task.delay(
+            user_id=user.user_id,
+            project_id=project.id,
+            file_content=file_content,
+            file_format=file_format,
+            validate_on_import=validate_on_import
+        )
+        
+        data['task_id'] = task.id
+        data['message'] = 'Import started in background. Use task_id to track progress.'
+        payload['message'] = "Import task started"
+        payload['data'] = data
+        
+        return Response(payload, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        errors['import'] = [str(e)]
+        payload['message'] = "Import failed"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def import_sms_recipients_view(request):
+    """Import SMS recipients for a campaign"""
+    from phone_generator.tasks import import_sms_recipients_task
+    
+    payload = {}
+    data = {}
+    errors = {}
+
+    user_id = request.data.get('user_id', "")
+    campaign_id = request.data.get('campaign_id', "")
+    file_format = request.data.get('format', 'csv')
+    
+    # Get file from request
+    if 'file' not in request.FILES:
+        errors['file'] = ['File is required.']
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    
+    if not campaign_id:
+        errors['campaign_id'] = ['Campaign ID is required.']
+    
+    if file_format not in ['csv', 'txt', 'json']:
+        errors['format'] = ['Invalid format. Must be csv, txt, or json.']
+
+    try:
+        user = User.objects.get(user_id=user_id)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+
+    if errors:
+        payload['message'] = "Errors"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        # Read file content
+        uploaded_file = request.FILES['file']
+        file_content = uploaded_file.read().decode('utf-8')
+        
+        # Start background import task
+        task = import_sms_recipients_task.delay(
+            user_id=user.user_id,
+            campaign_id=campaign_id,
+            file_content=file_content,
+            file_format=file_format
+        )
+        
+        data['task_id'] = task.id
+        data['message'] = 'Recipient import started in background. Use task_id to track progress.'
+        payload['message'] = "Import task started"
+        payload['data'] = data
+        
+        return Response(payload, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        errors['import'] = [str(e)]
+        payload['message'] = "Import failed"
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+

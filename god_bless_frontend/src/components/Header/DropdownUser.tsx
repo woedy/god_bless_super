@@ -2,11 +2,15 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import ClickOutside from '../ClickOutside';
 import UserOne from '../../images/user/user-01.png';
-import { baseUrlMedia, userEmail, username, userPhoto } from '../../constants';
+import { baseUrlMedia, getUsername, getUserEmail, getUserPhoto } from '../../constants';
 
 const DropdownUser = () => {
-  console.log(username);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  
+  // Safe access to user data
+  const username = getUsername();
+  const userEmail = getUserEmail();
+  const userPhoto = getUserPhoto();
 
   return (
     <ClickOutside onClick={() => setDropdownOpen(false)} className="relative">
@@ -17,17 +21,17 @@ const DropdownUser = () => {
       >
         <span className="hidden text-right lg:block">
           <span className="block text-sm font-medium text-black dark:text-white">
-          {`${username}`} 
+            {username || 'Guest User'}
           </span>
-          <span className="block text-xs">{userEmail}</span>
+          <span className="block text-xs">{userEmail || 'No email'}</span>
         </span>
 
         <span className="block h-12 w-12 rounded-full overflow-hidden">
-  <img
-    src={`${baseUrlMedia}${userPhoto}`}
-    alt="User"
-    className="object-cover w-full h-full"
-  />
+          <img
+            src={userPhoto ? `${baseUrlMedia}${userPhoto}` : UserOne}
+            alt="User"
+            className="object-cover w-full h-full"
+          />
 </span>
 
         <svg

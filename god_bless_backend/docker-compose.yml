@@ -5,17 +5,19 @@ services:
   redis:
     image: redis:alpine
     container_name: god_bless_redis
+    restart: always
 
   # Database Postgres
   db:
     image: postgres
     volumes:
-      - ./data/db:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
     environment:
       - POSTGRES_DB=god_bless_postgres
       - POSTGRES_USER=god_bless_postgres
       - POSTGRES_PASSWORD=god_bless_postgres
     container_name: god_bless_postgres_db
+    restart: always
 
   # Django Application
   god_bless_app:
@@ -27,18 +29,34 @@ services:
     ports:
       - 6161:6161
     container_name: god_bless_app
-    command: python manage.py runserver 0.0.0.0:6161
+    command: daphne -b 0.0.0.0 -p 6161 god_bless_pro.asgi:application
+    environment:
+      - DOCKER_ENV=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - POSTGRES_DB=god_bless_postgres
+      - POSTGRES_USER=god_bless_postgres
+      - POSTGRES_PASSWORD=god_bless_postgres
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CREATE_SUPERUSER=false
+      - LOAD_INITIAL_DATA=false
     depends_on:
       - db
+      - redis
+    restart: always
 
   # React Application
   god_bless_frontend:
     build:
-      context: ../god_bless_frontend  # Adjust the path to your React app
+      context: ../god_bless_frontend # Adjust the path to your React app
     ports:
-      - "4173:4173"  # Map to the host's port
+      - "5173:5173" # Map to the correct Vite dev server port
     environment:
-      - REACT_APP_API_URL=http://god_bless_app:6161  # API URL for Django service
+      - REACT_APP_API_URL=http://localhost:6161 # API URL for Django service (use localhost for browser access)
+    restart: always
 
   # Celery Worker
   celery:
@@ -49,6 +67,19 @@ services:
     volumes:
       - .:/god_bless_django
     container_name: god_bless_celery
+    environment:
+      - DOCKER_ENV=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - POSTGRES_DB=god_bless_postgres
+      - POSTGRES_USER=god_bless_postgres
+      - POSTGRES_PASSWORD=god_bless_postgres
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CREATE_SUPERUSER=false
+      - LOAD_INITIAL_DATA=false
     depends_on:
       - db
       - redis
@@ -63,6 +94,19 @@ services:
     volumes:
       - .:/god_bless_django
     container_name: god_bless_celery_beat
+    environment:
+      - DOCKER_ENV=true
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - POSTGRES_DB=god_bless_postgres
+      - POSTGRES_USER=god_bless_postgres
+      - POSTGRES_PASSWORD=god_bless_postgres
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - CREATE_SUPERUSER=false
+      - LOAD_INITIAL_DATA=false
     depends_on:
       - db
       - redis
@@ -70,3 +114,4 @@ services:
 
 volumes:
   static_cdn:
+  postgres_data:

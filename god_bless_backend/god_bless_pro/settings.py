@@ -60,7 +60,9 @@ INSTALLED_APPS = [
     "sms_sender",
     "phone_number_validator",
     "smtps",
-    "projects"
+    "proxy_server",
+    "projects",
+    "tasks"
 ]
 
 AUTH_USER_MODEL = "accounts.User"
@@ -69,13 +71,23 @@ AUTH_USER_MODEL = "accounts.User"
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "django.middleware.common.CommonMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
+    "god_bless_pro.middleware.APICacheMiddleware",
+    "god_bless_pro.middleware.QueryCountMiddleware",
+    "god_bless_pro.middleware.CompressionMiddleware",
+    "god_bless_pro.error_handlers.ErrorLoggingMiddleware",  # Error logging middleware
+    # Security middleware
+    "god_bless_pro.security_middleware.SecurityHeadersMiddleware",
+    "god_bless_pro.security_middleware.SessionSecurityMiddleware",
+    "god_bless_pro.security_middleware.InputSanitizationMiddleware",
+    "god_bless_pro.security_middleware.RateLimitMiddleware",
+    "god_bless_pro.security_middleware.SuspiciousActivityMiddleware",
+    "god_bless_pro.security_middleware.RequestLoggingMiddleware",
 ]
 
 ROOT_URLCONF = "god_bless_pro.urls"
@@ -123,8 +135,69 @@ DATABASES = {
 # }
 
 
-CELERY_BROKER_URL = "redis://redis:6379"
-CELERY_RESULT_BACKEND = "redis://redis:6379"
+# Celery Configuration
+# Use different Redis URLs for Docker vs local development
+import os
+if os.environ.get('DOCKER_ENV'):
+    CELERY_BROKER_URL = "redis://redis:6379/0"
+    CELERY_RESULT_BACKEND = "redis://redis:6379/0"
+    REDIS_HOST = "redis"
+    REDIS_URL = "redis://redis:6379/1"  # Use DB 1 for caching
+else:
+    # For local development, try localhost first, fallback to memory transport for testing
+    try:
+        import redis
+        r = redis.Redis(host='localhost', port=6379, db=0)
+        r.ping()
+        CELERY_BROKER_URL = "redis://localhost:6379/0"
+        CELERY_RESULT_BACKEND = "redis://localhost:6379/0"
+        REDIS_HOST = "localhost"
+        REDIS_URL = "redis://localhost:6379/1"  # Use DB 1 for caching
+    except:
+        # Fallback to memory transport for development without Redis
+        CELERY_BROKER_URL = "memory://"
+        CELERY_RESULT_BACKEND = "cache+memory://"
+        REDIS_HOST = None
+        REDIS_URL = None
+
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+CELERY_TASK_TRACK_STARTED = True
+CELERY_TASK_TIME_LIMIT = 30 * 60  # 30 minutes
+CELERY_RESULT_EXPIRES = 3600  # 1 hour
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+
+# Fix for redis-py version compatibility
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    'visibility_timeout': 3600,
+    'fanout_prefix': True,
+    'fanout_patterns': True,
+}
+# Remove CLIENT_CLASS from broker options to fix compatibility issue
+CELERY_REDIS_BACKEND_USE_SSL = False
+CELERY_WORKER_MAX_TASKS_PER_CHILD = 1000
+
+# Cache Configuration
+if REDIS_URL:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': REDIS_URL,
+            'KEY_PREFIX': 'godbless',
+            'TIMEOUT': 300,  # Default timeout: 5 minutes
+        }
+    }
+else:
+    # Fallback to local memory cache for development
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'unique-snowflake',
+        }
+    }
 
 
 # Password validation
@@ -176,21 +249,26 @@ MEDIA_ROOT = os.path.join(BASE_DIR, "media")  # Separate media files
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
-from celery import Celery
-
-app = Celery("god_bless_pro")
-app.config_from_object("django.conf:settings", namespace="CELERY")
-app.autodiscover_tasks()
+# Celery app is configured in celery.py
 
 
-CHANNEL_LAYERS = {
-    "default": {
-        "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {
-            "hosts": [("redis", 6379)],
+# Channel Layers Configuration
+if REDIS_HOST:
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [(REDIS_HOST, 6379)],
+            },
         },
-    },
-}
+    }
+else:
+    # Fallback to in-memory channel layer for development
+    CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels.layers.InMemoryChannelLayer"
+        },
+    }
 
 
 CORS_ALLOW_ALL_ORIGINS = True
@@ -199,12 +277,30 @@ CORS_ALLOWED_ORIGINS = []
 CORS_ALLOW_CREDENTIALS = True
 
 
-# REST_FRAMEWORK = {
-#    'DEFAULT_AUTHENTICATION_CLASSES': (
-#        'rest_framework_simplejwt.authentication.JWTAuthentication',
-#        # Add other authentication classes as needed
-#    ),
-# }
+# REST Framework Configuration
+REST_FRAMEWORK = {
+    'EXCEPTION_HANDLER': 'god_bless_pro.error_handlers.custom_exception_handler',
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework.authentication.TokenAuthentication',
+        # 'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_RENDERER_CLASSES': (
+        'rest_framework.renderers.JSONRenderer',
+    ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'god_bless_pro.rate_limiting.UserRateThrottle',
+        'god_bless_pro.rate_limiting.AnonRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'user': '1000/hour',  # Authenticated users
+        'anon': '100/hour',   # Anonymous users
+        'burst': '60/minute', # Burst protection
+        'sustained': '10000/day',  # Daily limit
+        'auth': '10/minute',  # Authentication endpoints
+        'phone_generation': '100/hour',  # Phone generation
+        'sms_sending': '500/hour',  # SMS sending
+    }
+}
 
 
 # SIMPLE_JWT = {
@@ -216,12 +312,119 @@ CORS_ALLOW_CREDENTIALS = True
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 
 
-ABSTRACT_PHONE_VALIDATOR_KEY = "e9afce9be3f84d67a428f06b72e713e0"
-IPQUALITY_API_KEY = "x7GrSuvURfF9DonfaqOPIssLoSa7GuP4"
-
-
 # CELERY_BROKER_URL = 'redis://localhost:6379/0'  # Adjust if necessary
 # CELERY_ACCEPT_CONTENT = ['json']
 # CELERY_TASK_SERIALIZER = 'json'
 # CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 # CELERY_TIMEZONE = 'UTC'  # Adjust the timezone if needed
+
+
+# Import logging configuration
+from god_bless_pro.logging_config import LOGGING
+
+
+# ============================================================================
+# SECURITY SETTINGS
+# ============================================================================
+
+# Session Security
+SESSION_COOKIE_SECURE = not DEBUG  # Use secure cookies in production
+SESSION_COOKIE_HTTPONLY = True  # Prevent JavaScript access to session cookie
+SESSION_COOKIE_SAMESITE = 'Lax'  # CSRF protection
+SESSION_COOKIE_AGE = 86400  # 24 hours (increased from 1 hour)
+SESSION_SAVE_EVERY_REQUEST = True  # Update session on every request
+SESSION_EXPIRE_AT_BROWSER_CLOSE = False
+
+# CSRF Protection
+CSRF_COOKIE_SECURE = not DEBUG  # Use secure cookies in production
+CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SAMESITE = 'Lax'
+CSRF_USE_SESSIONS = False
+CSRF_COOKIE_AGE = 31449600  # 1 year
+
+# Security Headers
+SECURE_BROWSER_XSS_FILTER = True
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+
+# HTTPS Settings (for production)
+if not DEBUG:
+    SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000  # 1 year
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
+
+# Password Validation
+AUTH_PASSWORD_VALIDATORS = [
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 8,
+        }
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
+]
+
+# File Upload Security
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760  # 10 MB
+FILE_UPLOAD_PERMISSIONS = 0o644
+ALLOWED_UPLOAD_EXTENSIONS = ['csv', 'txt', 'json', 'xlsx', 'xls']
+
+# Rate Limiting Configuration
+RATE_LIMIT_ENABLE = True
+RATE_LIMIT_USE_CACHE = 'default'
+
+# Audit Logging Configuration
+AUDIT_LOG_ENABLED = True
+AUDIT_LOG_RETENTION_DAYS = 90
+
+# Security Event Thresholds
+MAX_LOGIN_ATTEMPTS = 5
+LOGIN_ATTEMPT_TIMEOUT = 300  # 5 minutes
+SUSPICIOUS_ACTIVITY_THRESHOLD = 10
+
+# Token Security
+AUTH_TOKEN_EXPIRY_HOURS = 24
+TOKEN_ROTATION_ENABLED = True
+
+# IP Whitelist/Blacklist (optional)
+IP_WHITELIST = []  # Add trusted IPs here
+IP_BLACKLIST = []  # Add blocked IPs here
+
+# Content Security Policy
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "'unsafe-eval'")
+CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
+CSP_IMG_SRC = ("'self'", "data:", "https:")
+CSP_FONT_SRC = ("'self'", "data:")
+CSP_CONNECT_SRC = ("'self'",)
+CSP_FRAME_ANCESTORS = ("'none'",)
+
+# Additional Security Settings
+SECURE_REFERRER_POLICY = 'strict-origin-when-cross-origin'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+
+# Logging for security events
+LOGGING['loggers']['audit'] = {
+    'handlers': ['audit_file'],
+    'level': 'INFO',
+    'propagate': False,
+}
+
+LOGGING['handlers']['audit_file'] = {
+    'level': 'INFO',
+    'class': 'logging.handlers.RotatingFileHandler',
+    'filename': os.path.join(BASE_DIR, 'logs', 'audit.log'),
+    'maxBytes': 10485760,  # 10 MB
+    'backupCount': 10,
+    'formatter': 'verbose',
+}

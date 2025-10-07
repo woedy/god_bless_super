@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 
 from smtps.serializers import SmtpManagerSerializer
+from smtps.rotation_service import SMTPRotationService
 
 User = get_user_model()
 
@@ -173,3 +174,114 @@ def delete_smtp(request):
 
     return Response(payload, status=status.HTTP_200_OK)
     
+
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def check_smtp_health_view(request):
+    """Check health of a specific SMTP server"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.data.get('user_id', '')
+    smtp_id = request.data.get('smtp_id', '')
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    if not smtp_id:
+        errors['smtp_id'] = ['SMTP ID is required.']
+    
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+        smtp = SmtpManager.objects.get(id=smtp_id, user=user)
+        
+        rotation_service = SMTPRotationService(user)
+        is_healthy = rotation_service.check_smtp_health(smtp)
+        
+        payload['message'] = 'Successful'
+        payload['data'] = {
+            'smtp_id': smtp.id,
+            'is_healthy': is_healthy,
+            'health_check_failures': smtp.health_check_failures
+        }
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+    except SmtpManager.DoesNotExist:
+        errors['smtp_id'] = ['SMTP server does not exist.']
+    
+    payload['message'] = 'Errors'
+    payload['errors'] = errors
+    return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def check_all_smtp_health_view(request):
+    """Check health of all user's SMTP servers"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.data.get('user_id', '')
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+        rotation_service = SMTPRotationService(user)
+        results = rotation_service.check_all_smtp_health()
+        
+        payload['message'] = 'Successful'
+        payload['data'] = {'health_checks': results}
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_smtp_rotation_stats_view(request):
+    """Get SMTP rotation statistics"""
+    payload = {}
+    errors = {}
+    
+    user_id = request.query_params.get('user_id', None)
+    
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        user = User.objects.get(user_id=user_id)
+        rotation_service = SMTPRotationService(user)
+        stats = rotation_service.get_rotation_stats()
+        
+        payload['message'] = 'Successful'
+        payload['data'] = stats
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)

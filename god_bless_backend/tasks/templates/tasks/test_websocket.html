@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Progress Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .task-item {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 20px;
+            background-color: #f0f0f0;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .progress-fill {
+            height: 100%;
+            background-color: #4CAF50;
+            transition: width 0.3s ease;
+        }
+        .status {
+            padding: 5px 10px;
+            border-radius: 3px;
+            color: white;
+            font-weight: bold;
+        }
+        .status.PENDING { background-color: #ff9800; }
+        .status.STARTED { background-color: #2196F3; }
+        .status.PROGRESS { background-color: #2196F3; }
+        .status.SUCCESS { background-color: #4CAF50; }
+        .status.FAILURE { background-color: #f44336; }
+        .status.REVOKED { background-color: #9e9e9e; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .btn-primary { background-color: #2196F3; color: white; }
+        .btn-danger { background-color: #f44336; color: white; }
+        .btn-success { background-color: #4CAF50; color: white; }
+        #log {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Task Progress WebSocket Test</h1>
+    
+    <div>
+        <h3>Start Test Tasks</h3>
+        <button class="btn-primary" onclick="startTask('progress', {total_items: 50})">Start Progress Task (50 items)</button>
+        <button class="btn-primary" onclick="startTask('batch', {total_items: 30, batch_size: 5})">Start Batch Task (30 items, batch 5)</button>
+        <button class="btn-primary" onclick="startTask('long_running', {duration: 20})">Start Long Running Task (20s)</button>
+    </div>
+    
+    <div>
+        <h3>WebSocket Connection</h3>
+        <button class="btn-success" onclick="connectWebSocket()">Connect WebSocket</button>
+        <button class="btn-danger" onclick="disconnectWebSocket()">Disconnect WebSocket</button>
+        <span id="connection-status">Disconnected</span>
+    </div>
+    
+    <div>
+        <h3>Active Tasks</h3>
+        <div id="tasks-container"></div>
+    </div>
+    
+    <div>
+        <h3>WebSocket Log</h3>
+        <div id="log"></div>
+        <button onclick="clearLog()">Clear Log</button>
+    </div>
+
+    <script>
+        let ws = null;
+        let tasks = {};
+
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function connectWebSocket() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('WebSocket already connected');
+                return;
+            }
+
+            // Note: In production, you'd need proper authentication
+            ws = new WebSocket('ws://localhost:6161/ws/tasks/');
+            
+            ws.onopen = function(event) {
+                log('WebSocket connected');
+                document.getElementById('connection-status').textContent = 'Connected';
+                document.getElementById('connection-status').style.color = 'green';
+            };
+
+            ws.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                log(`Received: ${JSON.stringify(data)}`);
+                
+                if (data.type === 'task_progress') {
+                    updateTaskProgress(data);
+                } else if (data.type === 'task_completed') {
+                    updateTaskCompletion(data);
+                } else if (data.type === 'active_tasks') {
+                    displayActiveTasks(data.tasks);
+                }
+            };
+
+            ws.onclose = function(event) {
+                log('WebSocket disconnected');
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                document.getElementById('connection-status').style.color = 'red';
+            };
+
+            ws.onerror = function(error) {
+                log(`WebSocket error: ${error}`);
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        }
+
+        function startTask(taskType, params) {
+            // Note: In production, you'd need proper authentication headers
+            fetch('/api/tasks/test/start/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    // 'Authorization': 'Token your-auth-token'
+                },
+                body: JSON.stringify({
+                    task_type: taskType,
+                    ...params
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.task_id) {
+                    log(`Started task: ${data.task_id}`);
+                    tasks[data.task_id] = {
+                        task_id: data.task_id,
+                        task_type: taskType,
+                        status: 'PENDING',
+                        progress: 0
+                    };
+                    renderTasks();
+                } else {
+                    log(`Error starting task: ${data.error || 'Unknown error'}`);
+                }
+            })
+            .catch(error => {
+                log(`Error: ${error}`);
+            });
+        }
+
+        function cancelTask(taskId) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'cancel_task',
+                    task_id: taskId
+                }));
+            }
+        }
+
+        function updateTaskProgress(data) {
+            if (tasks[data.task_id]) {
+                tasks[data.task_id] = { ...tasks[data.task_id], ...data };
+                renderTasks();
+            }
+        }
+
+        function updateTaskCompletion(data) {
+            if (tasks[data.task_id]) {
+                tasks[data.task_id] = { ...tasks[data.task_id], ...data };
+                renderTasks();
+            }
+        }
+
+        function displayActiveTasks(activeTasks) {
+            activeTasks.forEach(task => {
+                tasks[task.task_id] = task;
+            });
+            renderTasks();
+        }
+
+        function renderTasks() {
+            const container = document.getElementById('tasks-container');
+            container.innerHTML = '';
+
+            Object.values(tasks).forEach(task => {
+                const taskDiv = document.createElement('div');
+                taskDiv.className = 'task-item';
+                
+                taskDiv.innerHTML = `
+                    <div>
+                        <strong>Task ID:</strong> ${task.task_id.substring(0, 8)}...
+                        <span class="status ${task.status}">${task.status}</span>
+                    </div>
+                    <div><strong>Type:</strong> ${task.task_type || 'Unknown'}</div>
+                    <div><strong>Progress:</strong> ${task.progress || 0}%</div>
+                    ${task.current_step ? `<div><strong>Step:</strong> ${task.current_step}</div>` : ''}
+                    ${task.processed_items ? `<div><strong>Processed:</strong> ${task.processed_items}/${task.total_items || '?'}</div>` : ''}
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${task.progress || 0}%"></div>
+                    </div>
+                    ${!['SUCCESS', 'FAILURE', 'REVOKED'].includes(task.status) ? 
+                        `<button class="btn-danger" onclick="cancelTask('${task.task_id}')">Cancel</button>` : 
+                        ''
+                    }
+                `;
+                
+                container.appendChild(taskDiv);
+            });
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            log('Page loaded. Click "Connect WebSocket" to start monitoring tasks.');
+        };
+    </script>
+</body>
+</html>

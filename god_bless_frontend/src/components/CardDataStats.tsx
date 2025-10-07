@@ -1,15 +1,15 @@
-import React, { ReactNode } from 'react';
+import { ReactNode, FC } from 'react';
 
 interface CardDataStatsProps {
   title: string;
   total: string;
-  rate: string;
+  rate?: string;
   levelUp?: boolean;
   levelDown?: boolean;
   children: ReactNode;
 }
 
-const CardDataStats: React.FC<CardDataStatsProps> = ({
+const CardDataStats: FC<CardDataStatsProps> = ({
   title,
   total,
   rate,
@@ -31,12 +31,13 @@ const CardDataStats: React.FC<CardDataStatsProps> = ({
           <span className="text-sm font-medium">{title}</span>
         </div>
 
-        <span
-          className={`flex items-center gap-1 text-sm font-medium ml-4 ${
-            levelUp && 'text-meta-3'
-          } ${levelDown && 'text-meta-5'} `}
-        >
-          {rate}
+        {rate && (
+          <span
+            className={`flex items-center gap-1 text-sm font-medium ml-4 ${
+              levelUp && 'text-meta-3'
+            } ${levelDown && 'text-meta-5'} `}
+          >
+            {rate}
 
           {levelUp && (
             <svg
@@ -68,7 +69,8 @@ const CardDataStats: React.FC<CardDataStatsProps> = ({
               />
             </svg>
           )}
-        </span>
+          </span>
+        )}
       </div>
     </div>
   );

@@ -127,46 +127,6 @@ def format_provider_email_address(number: str, provider: str):
 
 
 
-########################################
-
-
-
-
-
-import re
-
-def replace_with_regex(text, replacements):
-    """
-    This function will replace placeholders like @Company or @firstname
-    with corresponding values from the replacements dictionary using regex.
-    """
-    # Use regex to find all placeholders in the form of @name
-    def replace_placeholder(match):
-        placeholder = match.group(1)  # The placeholder inside the '@' symbol
-        return replacements.get(placeholder, match.group(0))  # Replace or return original
-
-    # Regex pattern to match words starting with '@'
-    pattern = r"@(\w+)"
-    result = re.sub(pattern, replace_placeholder, text)
-    return result
-
-# Example input string
-text = "Thank you for shopping with @Company. Love you @firstname."
-
-# Dictionary with the actual data to replace placeholders
-replacements = {
-    "Company": "Acme Corp",
-    "firstname": "John"
-}
-
-# Replace placeholders using regex
-final_text = replace_with_regex(text, replacements)
-
-# Print the final text
-print(final_text)
-
-
-
 import re
 
 def replace_dynamic_placeholders(text, replacements):
@@ -187,19 +147,3 @@ def replace_dynamic_placeholders(text, replacements):
     result = re.sub(pattern, replace_placeholder, text)
     
     return result
-
-# Example dynamic string
-text = "Hello @firstname, welcome to @Company! Your order ID is @OrderID."
-
-# Dictionary with dynamic values to replace placeholders
-replacements = {
-    "firstname": "John",
-    "Company": "Acme Corp",
-    "OrderID": "12345XYZ"
-}
-
-# Replace dynamic placeholders with actual values
-final_text = replace_dynamic_placeholders(text, replacements)
-
-# Print the final text
-print(final_text)

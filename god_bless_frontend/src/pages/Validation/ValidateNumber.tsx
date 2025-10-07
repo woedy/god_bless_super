@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Breadcrumb from '../../components/Breadcrumbs/Breadcrumb';
 import userThree from '../../images/user/user-03.png';
-import { baseUrl, userID, userToken } from '../../constants';
+import { baseUrl, getUserID, getUserToken } from '../../constants';
 import { Link, useNavigate } from 'react-router-dom';
 
 const ValidateNumber = () => {
@@ -46,7 +46,7 @@ const ValidateNumber = () => {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          Authorization: `Token ${userToken}`,
+          Authorization: `Token ${getUserToken()}`,
         },
         body: formData,
       });
@@ -110,7 +110,7 @@ const ValidateNumber = () => {
 
     // Create FormData object
     const formData = new FormData();
-    formData.append('user_id', userID);
+    formData.append('user_id', getUserID() || '');
     formData.append('phone', phoneNumber2);
 
     // Make a POST request to the server
@@ -122,7 +122,7 @@ const ValidateNumber = () => {
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          Authorization: `Token ${userToken}`,
+          Authorization: `Token ${getUserToken()}`,
         },
         body: formData,
       });
