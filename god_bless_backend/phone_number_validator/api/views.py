@@ -189,14 +189,18 @@ def validate_all_phone_numbers_free(request):
         payload['errors'] = errors
         return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
-    # Prepare for bulk updates
-    updated_phone_numbers = []
-    error_phone_numbers = []
+    # Prepare for bulk updates and counters
+    total_validated = 0
+    total_failed = 0
 
     # Batch processing (using chunks to process in smaller batches)
     batch_size = 1000  # Adjust as needed, depending on performance
     for i in range(0, len(phone_numbers), batch_size):
         batch = phone_numbers[i:i+batch_size]
+        
+        # Prepare batch lists
+        batch_updated_numbers = []
+        batch_error_numbers = []
 
         # Start a database transaction for batch processing
         with transaction.atomic():
@@ -220,28 +224,29 @@ def validate_all_phone_numbers_free(request):
                     phone_number.country_name = "United States"  # Adjust this if needed
                     phone_number.prefix = '+1'  # Assuming all numbers are US-based
                     phone_number.validation_attempted = True  # Mark as validated
-                    updated_phone_numbers.append(phone_number)
+                    batch_updated_numbers.append(phone_number)
 
                 except PhonePrefix.DoesNotExist:
                     # If no matching record is found, mark as invalid
                     phone_number.valid_number = False
                     phone_number.validation_attempted = True
-                    error_phone_numbers.append(phone_number)
+                    batch_error_numbers.append(phone_number)
 
             # Bulk update the valid phone numbers in the batch
-            if updated_phone_numbers:
-                PhoneNumber.objects.bulk_update(updated_phone_numbers, ['valid_number', 'carrier', 'state', 'type', 'location', 'country_name', 'prefix', 'validation_attempted'])
+            if batch_updated_numbers:
+                PhoneNumber.objects.bulk_update(batch_updated_numbers, ['valid_number', 'carrier', 'state', 'type', 'location', 'country_name', 'prefix', 'validation_attempted'])
+                total_validated += len(batch_updated_numbers)
 
             # Bulk update the invalid phone numbers in the batch
-            if error_phone_numbers:
-                PhoneNumber.objects.bulk_update(error_phone_numbers, ['valid_number', 'validation_attempted'])
-
-            # Reset the lists for the next batch
-            updated_phone_numbers.clear()
-            error_phone_numbers.clear()
+            if batch_error_numbers:
+                PhoneNumber.objects.bulk_update(batch_error_numbers, ['valid_number', 'validation_attempted'])
+                total_failed += len(batch_error_numbers)
 
     # Return a summary response
-    payload['message'] = "Validation completed"
-    payload['validated'] = len(updated_phone_numbers)
-    payload['failed'] = len(error_phone_numbers)
+    payload['message'] = "Validation completed successfully"
+    payload['data'] = {
+        'validated_count': total_validated,
+        'error_count': total_failed,
+        'total_processed': total_validated + total_failed
+    }
     return Response(payload, status=status.HTTP_200_OK)

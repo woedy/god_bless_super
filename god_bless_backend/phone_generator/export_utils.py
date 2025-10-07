@@ -111,11 +111,16 @@ def export_phone_numbers(queryset, format: str, fields: List[str] = None) -> str
     # Convert queryset to list of dicts
     data = list(queryset.values(*fields))
     
-    # Convert datetime objects to strings
+    # Convert datetime and date objects to strings
+    import datetime
     for row in data:
         for key, value in row.items():
-            if hasattr(value, 'isoformat'):
+            if isinstance(value, datetime.datetime):
                 row[key] = value.isoformat()
+            elif isinstance(value, datetime.date):
+                row[key] = value.isoformat()
+            elif value is None:
+                row[key] = ''
     
     if format == 'csv':
         return export_to_csv(data, fields)

@@ -36,7 +36,7 @@ export const ROUTES = {
   PHONE_NUMBERS: '/phone-numbers',
   PHONE_GENERATE: '/phone-numbers/generate',
   PHONE_VALIDATE: '/phone-numbers/validate',
-  PHONE_MANAGE: '/phone-numbers/manage',
+  PHONE_LIST: '/phone-numbers/list',
   PHONE_IMPORT: '/phone-numbers/import',
   PHONE_EXPORT: '/phone-numbers/export',
   

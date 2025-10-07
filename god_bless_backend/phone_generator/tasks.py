@@ -22,7 +22,7 @@ User = get_user_model()
 @shared_task(bind=True, base=ProgressTrackingTask)
 def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity, 
                                carrier_filter=None, type_filter=None, 
-                               batch_size=1000, category=TaskCategory.PHONE_GENERATION):
+                               batch_size=1000, auto_validate=False, category=TaskCategory.PHONE_GENERATION):
     """
     Generate large-scale phone numbers (up to 1M) with progress tracking and WebSocket notifications
     """
@@ -174,6 +174,43 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
         })
         
         logger.info(f"Phone generation completed: {total_generated} numbers generated")
+        
+        # Auto-validate generated numbers if requested
+        if auto_validate and total_generated > 0:
+            logger.info(f"Starting auto-validation for {total_generated} generated numbers")
+            
+            # Update progress to show validation starting
+            self.update_progress(
+                progress=100,
+                current_step=f"Auto-validating {total_generated} generated numbers...",
+                processed_items=total_generated,
+                total_items=quantity
+            )
+            
+            # Get the generated phone numbers for this task
+            generated_phone_ids = list(
+                PhoneNumber.objects.filter(
+                    user=user,
+                    project=project,
+                    area_code=area_code,
+                    created_at__gte=generation_task.created_at
+                ).values_list('id', flat=True)[:total_generated]
+            )
+            
+            if generated_phone_ids:
+                # Start validation task for the generated numbers
+                from phone_generator.tasks import validate_phone_numbers_task
+                validation_task = validate_phone_numbers_task.delay(
+                    user_id=user.user_id,
+                    phone_ids=generated_phone_ids,
+                    batch_size=500
+                )
+                
+                logger.info(f"Auto-validation task started: {validation_task.id}")
+                
+                # Update result data to include validation task info
+                generation_task.result_data['auto_validation_task_id'] = validation_task.id
+                generation_task.save()
         
         return {
             'message': f'Successfully generated {total_generated} phone numbers',

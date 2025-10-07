@@ -40,11 +40,15 @@ export const API_ENDPOINTS = {
   
   // Phone Numbers
   PHONE_NUMBERS: {
-    LIST: '/phone-numbers/',
-    GENERATE: '/phone-numbers/generate/',
-    VALIDATE: '/phone-numbers/validate/',
-    EXPORT: '/phone-numbers/export/',
-    BULK_VALIDATE: '/phone-numbers/bulk-validate/'
+    LIST: '/phone-generator/list-numbers/',
+    GENERATE: '/phone-generator/generate-numbers-enhanced/',
+    VALIDATE: '/phone-validator/start-validation-free/',
+    EXPORT: '/phone-generator/export/',
+    IMPORT: '/phone-generator/import/',
+    STATISTICS: '/phone-generator/statistics/',
+    COUNTRIES: '/phone-generator/countries/', // Mock endpoint
+    CARRIERS: '/phone-generator/carriers/', // Mock endpoint
+    SINGLE_VALIDATE: '/phone-validator/validate-number-id-free/'
   },
   
   // SMS Campaigns

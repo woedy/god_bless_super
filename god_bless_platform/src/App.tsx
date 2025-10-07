@@ -17,6 +17,9 @@ import {
   EditProjectPage,
   ProjectDetailPage,
   PhoneNumbersPage,
+  GenerateNumbersPage,
+  ValidateNumbersPage,
+  NumberListPage,
   SMSPage,
   TasksPage,
   LandingPage 
@@ -117,6 +120,33 @@ function App() {
               element={
                 <ProtectedRoute>
                   <PhoneNumbersPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.PHONE_GENERATE}
+              element={
+                <ProtectedRoute>
+                  <GenerateNumbersPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.PHONE_VALIDATE}
+              element={
+                <ProtectedRoute>
+                  <ValidateNumbersPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.PHONE_LIST}
+              element={
+                <ProtectedRoute>
+                  <NumberListPage />
                 </ProtectedRoute>
               } 
             />

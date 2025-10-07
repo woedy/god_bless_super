@@ -18,5 +18,8 @@ export * from './projects'
 // Dashboard Components
 export * from './dashboard'
 
+// Phone Number Components
+export * from './phone-numbers'
+
 // Chart Components
 // export * from './charts' // TODO: Implement chart components

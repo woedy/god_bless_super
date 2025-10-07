@@ -136,7 +136,8 @@ def generate_numbers_view(request):
                 user_id=user.user_id,
                 project_id=project.id,
                 area_code=area_code,
-                quantity=size
+                quantity=size,
+                auto_validate=False  # Default to False for legacy calls
             )
             
             data['task_id'] = task.id
@@ -202,7 +203,8 @@ def generate_numbers_enhanced_view(request):
             quantity=quantity,
             carrier_filter=carrier_filter,
             type_filter=type_filter,
-            batch_size=batch_size
+            batch_size=batch_size,
+            auto_validate=False  # Default to False for legacy calls
         )
 
         data['task_id'] = task.id
@@ -249,7 +251,7 @@ def get_all_numbers_view(request):
     search_query = request.query_params.get('search', '')
     date = request.query_params.get('date', '')
     page_number = request.query_params.get('page', 1)
-    page_size = 100
+    page_size = int(request.query_params.get('page_size', 20))  # Default to 20, allow custom page size
 
     
     if not user_id:
@@ -1186,12 +1188,12 @@ def generate_numbers_with_config_view(request):
         area_code = request.data.get('area_code', "")
         quantity = request.data.get('quantity', 0)
         
-        # Advanced configuration options
+        # Advanced configuration options - check both top-level and config object
         config = request.data.get('config', {})
         carrier_filter = config.get('carrier_filter', None)
         type_filter = config.get('type_filter', None)
-        batch_size = config.get('batch_size', 1000)
-        auto_validate = config.get('auto_validate', False)
+        batch_size = request.data.get('batch_size', config.get('batch_size', 1000))
+        auto_validate = request.data.get('auto_validate', config.get('auto_validate', False))
         validation_batch_size = config.get('validation_batch_size', 500)
 
         # Validate input
@@ -1233,7 +1235,8 @@ def generate_numbers_with_config_view(request):
             quantity=quantity,
             carrier_filter=carrier_filter,
             type_filter=type_filter,
-            batch_size=batch_size
+            batch_size=batch_size,
+            auto_validate=auto_validate
         )
 
         # If auto-validate is enabled, chain validation task
@@ -1526,7 +1529,8 @@ def generate_numbers_with_config_view(request):
             quantity=quantity,
             carrier_filter=carrier_filter,
             type_filter=type_filter,
-            batch_size=batch_size
+            batch_size=batch_size,
+            auto_validate=auto_validate
         )
 
         # If auto-validate is enabled, chain validation task
@@ -1573,6 +1577,8 @@ def export_phone_numbers_view(request):
     filters = request.data.get('filters', {})
     fields = request.data.get('fields', None)
     use_background = request.data.get('use_background', False)
+    include_invalid = request.data.get('include_invalid', False)
+    include_metadata = request.data.get('include_metadata', False)
 
     # Validate input
     if not user_id:
@@ -1602,6 +1608,10 @@ def export_phone_numbers_view(request):
     
     if project_id:
         queryset = queryset.filter(project_id=project_id)
+    
+    # Apply include_invalid filter - if False, only include valid numbers
+    if not include_invalid:
+        queryset = queryset.filter(valid_number=True)
     
     # Apply filters
     if filters.get('carrier'):
@@ -1642,7 +1652,14 @@ def export_phone_numbers_view(request):
         timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
         filename = f"phone_numbers_{timestamp}.{format}"
         
-        return create_export_response(content, format, filename)
+        # Instead of returning file directly, return JSON with content
+        data['content'] = content
+        data['filename'] = filename
+        data['format'] = format
+        data['total_records'] = total_count
+        payload['message'] = "Export completed"
+        payload['data'] = data
+        return Response(payload, status=status.HTTP_200_OK)
         
     except Exception as e:
         errors['export'] = [str(e)]

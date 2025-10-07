@@ -160,6 +160,7 @@ export interface NumberFilters extends PaginationParams {
   validatedAfter?: string
   validatedBefore?: string
   source?: string
+  areaCode?: string
 }
 
 export interface ExportParams {
@@ -172,10 +173,15 @@ export interface ExportParams {
 }
 
 export interface ExportResponse {
-  taskId: string
+  taskId?: string
+  task_id?: string
   downloadUrl?: string
-  estimatedSize: number
-  estimatedDuration: number
+  content?: string
+  filename?: string
+  format?: string
+  total_records?: number
+  estimatedSize?: number
+  estimatedDuration?: number
 }
 
 export interface ImportNumbersParams {

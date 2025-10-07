@@ -16,6 +16,9 @@ export { projectService, ProjectService, ProjectValidation } from './projects'
 // Dashboard Service
 export { dashboardService, DashboardService } from './dashboard'
 
+// Phone Number Service
+export { phoneNumberService, PhoneNumberService } from './phoneNumbers'
+
 // WebSocket Service
 export { websocketManager, WebSocketManager } from './websocket'
 
@@ -24,6 +27,7 @@ import { apiClient } from './api'
 import { authService } from './auth'
 import { projectService } from './projects'
 import { dashboardService } from './dashboard'
+import { phoneNumberService } from './phoneNumbers'
 import { websocketManager } from './websocket'
 
 export const api = {
@@ -31,5 +35,6 @@ export const api = {
   auth: authService,
   projects: projectService,
   dashboard: dashboardService,
+  phoneNumbers: phoneNumberService,
   websocket: websocketManager
 }
