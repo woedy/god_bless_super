@@ -1,71 +1,87 @@
 # Technology Stack
 
-## Backend (Django)
-- **Framework**: Django 4.x with Django REST Framework
-- **Database**: PostgreSQL (production), SQLite (development)
-- **Cache/Message Broker**: Redis
-- **Background Tasks**: Celery with Celery Beat for scheduling
-- **Authentication**: JWT tokens via djangorestframework-simplejwt
-- **ASGI Server**: Daphne for WebSocket support
-- **WSGI Server**: Gunicorn for production
-- **Additional Libraries**:
-  - `phonenumbers` for phone validation
-  - `pyfcm` for Firebase Cloud Messaging
-  - `beautifulsoup4` for web scraping
-  - `requests` for HTTP clients
-  - `Pillow` for image processing
+## Backend (god_bless_backend)
 
-## Frontend (React)
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
-- **UI Components**: Custom components based on TailAdmin template
-- **Charts**: ApexCharts via react-apexcharts
-- **Routing**: React Router DOM
-- **Notifications**: React Hot Toast
-- **Data Processing**: PapaParse for CSV, json2csv for exports
-- **Icons**: React Icons
+**Framework**: Django 5.1+ with Django REST Framework
+**Database**: PostgreSQL (production) / SQLite (development)
+**Cache & Message Broker**: Redis
+**Task Queue**: Celery with django-celery-beat
+**WebSockets**: Django Channels with channels-redis
+**Authentication**: Token-based authentication
+**Server**: Gunicorn with Daphne for ASGI
 
-## Development & Deployment
-- **Containerization**: Docker with Docker Compose
-- **Code Formatting**: Prettier with Tailwind plugin
-- **Package Management**: npm (frontend), pip (backend)
+### Key Dependencies
+- `djangorestframework` - API development
+- `celery` - Background task processing
+- `channels` - WebSocket support
+- `redis` - Caching and message broker
+- `psycopg2-binary` - PostgreSQL adapter
+- `phonenumbers` - Phone number validation
+- `requests` - HTTP client
+- `bleach` - HTML sanitization
+
+## Frontend (god_bless_frontend)
+
+**Framework**: React 18 with TypeScript
+**Build Tool**: Vite 4
+**Styling**: Tailwind CSS 3
+**UI Components**: TailAdmin template base
+**Charts**: ApexCharts with react-apexcharts
+**Routing**: React Router DOM 6
+**State Management**: React hooks (no external state library)
+**Testing**: Vitest with Testing Library
+
+### Key Dependencies
+- `react` & `react-dom` - Core React
+- `react-router-dom` - Client-side routing
+- `apexcharts` - Data visualization
+- `react-hot-toast` - Notifications
+- `papaparse` - CSV parsing
+- `file-saver` - File downloads
+
+## Infrastructure
+
+**Containerization**: Docker with docker-compose
+**Reverse Proxy**: Nginx
+**Monitoring**: Prometheus, Grafana, Loki (optional)
+**SSL**: Let's Encrypt with Certbot
 
 ## Common Commands
 
 ### Backend Development
 ```bash
-# Navigate to backend
-cd god_bless_backend
+# Setup virtual environment
+python -m venv .venv
+source .venv/bin/activate  # Linux/Mac
+.venv\Scripts\activate     # Windows
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Run migrations
+# Database operations
+python manage.py makemigrations
 python manage.py migrate
-
-# Create superuser
 python manage.py createsuperuser
 
 # Run development server
-python manage.py runserver 0.0.0.0:6161
+python manage.py runserver
 
-# Run Celery worker
-celery -A god_bless_pro worker -l DEBUG
+# Run Celery worker (separate terminal)
+celery -A god_bless_pro worker -l info
 
-# Run Celery beat scheduler
-celery -A god_bless_pro beat -l DEBUG
+# Run Celery beat scheduler (separate terminal)
+celery -A god_bless_pro beat -l info
+
+# Run tests
+python -m pytest
 ```
 
 ### Frontend Development
 ```bash
-# Navigate to frontend
-cd god_bless_frontend
-
 # Install dependencies
 npm install
 
-# Run development server
+# Development server
 npm run dev
 
 # Build for production
@@ -73,26 +89,31 @@ npm run build
 
 # Preview production build
 npm run preview
+
+# Run tests
+npm run test
+npm run test:watch
+npm run test:coverage
 ```
 
-### Docker Commands
+### Docker Operations
 ```bash
-# Build and run all services
-docker-compose up --build
-
-# Run in detached mode
+# Local development
 docker-compose up -d
 
-# Stop all services
-docker-compose down
+# Production deployment
+docker-compose -f docker-compose.prod.yml up -d
 
 # View logs
 docker-compose logs -f [service_name]
+
+# Rebuild specific service
+docker-compose build [service_name]
 ```
 
-## Port Configuration
-- **Backend API**: 6161
-- **Frontend Dev**: 5173
-- **Frontend Preview**: 4173
-- **PostgreSQL**: 5432 (internal)
-- **Redis**: 6379 (internal)
+## Environment Configuration
+
+- Use `.env.local` for local development
+- Use `.env.example` as template
+- Production uses environment variables in docker-compose
+- Frontend uses `VITE_` prefixed environment variables

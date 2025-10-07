@@ -1,21 +1,23 @@
 # Product Overview
 
-God Bless is a multi-service platform that provides various utilities and tools including:
+God Bless America is a comprehensive phone number management and validation platform with SMS capabilities. The system provides:
 
-- **Phone Number Services**: Phone number generation, validation, and management
-- **SMS Services**: SMS sending capabilities with multiple provider support
-- **Banking Integration**: Bank-related services and integrations
-- **URL Shortening**: Link shortening service
-- **Email Services**: SMTP server management and email functionality
-- **Proxy Services**: Proxy server management
-- **Project Management**: Project tracking and management features
-- **User Management**: Account and authentication system
+- **Phone Number Generation**: Automated generation of phone numbers with validation
+- **SMS Services**: Bulk SMS sending and management capabilities  
+- **Phone Number Validation**: Real-time validation of phone numbers
+- **Project Management**: Organization of phone numbers and SMS campaigns into projects
+- **User Management**: Multi-user support with authentication and authorization
+- **Dashboard Analytics**: Real-time monitoring and reporting of system activities
+- **Task Management**: Background task processing for bulk operations
 
-The platform consists of a Django REST API backend with a React-based admin dashboard frontend, designed for managing and monitoring various digital services and utilities.
+The platform is designed for businesses and organizations that need to manage large volumes of phone numbers, validate contact information, and send SMS communications at scale.
 
 ## Key Features
-- Multi-tenant architecture with user accounts
-- Real-time processing with Celery background tasks
-- Admin dashboard with analytics and management tools
-- API-first design with REST endpoints
-- Containerized deployment with Docker
+
+- Real-time WebSocket connections for live updates
+- Bulk import/export functionality for phone numbers
+- Advanced filtering and search capabilities
+- Comprehensive audit logging and security features
+- Multi-tenant architecture supporting multiple projects
+- Background task processing with Celery
+- RESTful API with comprehensive documentation
