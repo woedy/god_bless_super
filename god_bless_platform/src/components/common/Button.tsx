@@ -14,6 +14,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   leftIcon?: ReactNode
   rightIcon?: ReactNode
   fullWidth?: boolean
+  responsive?: boolean
   children: ReactNode
 }
 
@@ -27,6 +28,7 @@ export function Button({
   leftIcon,
   rightIcon,
   fullWidth = false,
+  responsive = false,
   disabled,
   className,
   children,
@@ -37,19 +39,19 @@ export function Button({
 
   // Variant classes
   const variantClasses = {
-    primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500 active:bg-blue-800',
-    secondary: 'bg-gray-600 text-white hover:bg-gray-700 focus:ring-gray-500 active:bg-gray-800',
-    outline: 'border-2 border-blue-600 text-blue-600 bg-transparent hover:bg-blue-50 focus:ring-blue-500 active:bg-blue-100',
-    ghost: 'text-blue-600 bg-transparent hover:bg-blue-50 focus:ring-blue-500 active:bg-blue-100',
-    danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500 active:bg-red-800'
+    primary: 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 focus:ring-blue-500 active:bg-blue-800',
+    secondary: 'bg-gray-600 text-white hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600 focus:ring-gray-500 active:bg-gray-800',
+    outline: 'border-2 border-blue-600 dark:border-blue-500 text-blue-600 dark:text-blue-400 bg-transparent hover:bg-blue-50 dark:hover:bg-blue-900/20 focus:ring-blue-500 active:bg-blue-100 dark:active:bg-blue-900/30',
+    ghost: 'text-blue-600 dark:text-blue-400 bg-transparent hover:bg-blue-50 dark:hover:bg-blue-900/20 focus:ring-blue-500 active:bg-blue-100 dark:active:bg-blue-900/30',
+    danger: 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 focus:ring-red-500 active:bg-red-800'
   }
 
   // Size classes
   const sizeClasses = {
-    sm: 'px-3 py-2 text-sm',
-    md: 'px-4 py-2.5 text-base',
-    lg: 'px-6 py-3 text-lg',
-    xl: 'px-8 py-4 text-xl'
+    sm: responsive ? 'px-2 py-1.5 text-xs sm:px-3 sm:py-2 sm:text-sm' : 'px-3 py-2 text-sm',
+    md: responsive ? 'px-3 py-2 text-sm sm:px-4 sm:py-2.5 sm:text-base' : 'px-4 py-2.5 text-base',
+    lg: responsive ? 'px-4 py-2.5 text-base sm:px-6 sm:py-3 sm:text-lg' : 'px-6 py-3 text-lg',
+    xl: responsive ? 'px-6 py-3 text-lg sm:px-8 sm:py-4 sm:text-xl' : 'px-8 py-4 text-xl'
   }
 
   // Loading spinner

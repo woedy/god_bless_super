@@ -10,6 +10,15 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'god_bless_pro.settings')
 
 app = Celery('god_bless_pro')
 app.config_from_object('django.conf:settings', namespace='CELERY')
+
+# Apply performance optimizations
+try:
+    from .celery_performance import apply_performance_config
+    app = apply_performance_config(app)
+    logger.info("Applied Celery performance optimizations")
+except ImportError:
+    logger.warning("Celery performance optimizations not available")
+
 app.autodiscover_tasks()
 
 
@@ -93,6 +102,24 @@ app.conf.beat_schedule = {
     'cleanup-old-tasks': {
         'task': 'tasks.tasks.cleanup_old_tasks_periodic',
         'schedule': crontab(hour=2, minute=0),  # Run daily at 2 AM
+    },
+    # SMTP health monitoring tasks
+    'smtp-health-check-all-users': {
+        'task': 'smtps.tasks.check_smtp_health_for_all_users',
+        'schedule': crontab(minute='*/10'),  # Run every 10 minutes
+    },
+    'cleanup-unhealthy-smtp-servers': {
+        'task': 'smtps.tasks.cleanup_unhealthy_smtp_servers',
+        'schedule': crontab(hour=3, minute=0),  # Run daily at 3 AM
+    },
+    'generate-smtp-performance-report': {
+        'task': 'smtps.tasks.generate_smtp_performance_report',
+        'schedule': crontab(hour=1, minute=0),  # Run daily at 1 AM
+    },
+    # SMS retry management tasks
+    'cleanup-old-retry-attempts': {
+        'task': 'sms_sender.tasks.cleanup_old_retry_attempts',
+        'schedule': crontab(hour=4, minute=0),  # Run daily at 4 AM
     },
 }
 app.conf.timezone = 'UTC'

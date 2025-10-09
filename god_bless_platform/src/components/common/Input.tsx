@@ -47,9 +47,9 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
 
   // Variant classes
   const variantClasses = {
-    default: 'border border-gray-300 bg-white focus:border-blue-500 focus:ring-blue-500',
-    filled: 'border-0 bg-gray-100 focus:bg-white focus:ring-blue-500',
-    outlined: 'border-2 border-gray-300 bg-transparent focus:border-blue-500'
+    default: 'border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:border-blue-500 focus:ring-blue-500',
+    filled: 'border-0 bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:bg-white dark:focus:bg-gray-800 focus:ring-blue-500',
+    outlined: 'border-2 border-gray-300 dark:border-gray-600 bg-transparent text-gray-900 dark:text-gray-100 focus:border-blue-500'
   }
 
   // Input classes
@@ -71,10 +71,10 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
     rightIcon && 'pr-10',
     
     // Error state
-    error && 'border-red-500 focus:border-red-500 focus:ring-red-500',
+    error && 'border-red-500 dark:border-red-400 focus:border-red-500 focus:ring-red-500',
     
     // Disabled state
-    disabled && 'bg-gray-100 text-gray-500 cursor-not-allowed',
+    disabled && 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed',
     
     // Custom classes
     className
@@ -88,8 +88,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
           htmlFor={inputId}
           className={clsx(
             'block text-sm font-medium mb-2',
-            error ? 'text-red-700' : 'text-gray-700',
-            disabled && 'text-gray-500'
+            error ? 'text-red-700 dark:text-red-400' : 'text-gray-700 dark:text-gray-300',
+            disabled && 'text-gray-500 dark:text-gray-400'
           )}
         >
           {label}
@@ -103,8 +103,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
         {leftIcon && (
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <div className={clsx(
-              'text-gray-400',
-              error && 'text-red-500'
+              'text-gray-400 dark:text-gray-500',
+              error && 'text-red-500 dark:text-red-400'
             )}>
               {leftIcon}
             </div>
@@ -131,8 +131,8 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
         {rightIcon && (
           <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
             <div className={clsx(
-              'text-gray-400',
-              error && 'text-red-500'
+              'text-gray-400 dark:text-gray-500',
+              error && 'text-red-500 dark:text-red-400'
             )}>
               {rightIcon}
             </div>
@@ -144,7 +144,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
       {error && (
         <p 
           id={`${inputId}-error`}
-          className="mt-2 text-sm text-red-600"
+          className="mt-2 text-sm text-red-600 dark:text-red-400"
           role="alert"
         >
           {error}
@@ -155,7 +155,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(({
       {helperText && !error && (
         <p 
           id={`${inputId}-helper`}
-          className="mt-2 text-sm text-gray-500"
+          className="mt-2 text-sm text-gray-500 dark:text-gray-400"
         >
           {helperText}
         </p>

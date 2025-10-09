@@ -97,6 +97,12 @@ export function CampaignsPage() {
             </p>
           </div>
           <div className="flex space-x-3">
+            <Button variant="outline" onClick={() => navigate('/sms/templates')}>
+              📋 Templates
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/sms/optimization')}>
+              🚀 Optimization
+            </Button>
             <Button variant="outline" onClick={handleBulkSMS}>
               Send Bulk SMS
             </Button>

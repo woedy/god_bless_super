@@ -255,5 +255,19 @@ export type {
   A11yProps
 } from './ui'
 
+// Rotation and Delivery Types
+export type {
+  RotationStrategy,
+  RotationSettings,
+  ServerHealth,
+  CampaignTemplate,
+  CampaignDeliverySettings,
+  ServerUsageStats,
+  CarrierPerformance,
+  OptimizationRecommendation,
+  PredictiveAnalytics,
+  CampaignProgress
+} from './rotation'
+
 // Re-export constants from config for convenience
 export { WS_CHANNELS } from './websocket'

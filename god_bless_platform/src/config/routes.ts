@@ -45,6 +45,8 @@ export const ROUTES = {
   SMS_CAMPAIGNS: '/sms/campaigns',
   SMS_CREATE: '/sms/create',
   SMS_BULK: '/sms/bulk',
+  SMS_OPTIMIZATION: '/sms/optimization',
+  SMS_TEMPLATES: '/sms/templates',
   SMS_CAMPAIGN_VIEW: '/sms/campaigns/:campaignId',
   SMS_CAMPAIGN_EDIT: '/sms/campaigns/:campaignId/edit',
   SMS_EDIT: '/sms/:id/edit',
@@ -55,6 +57,7 @@ export const ROUTES = {
   TASKS: '/tasks',
   TASK_VIEW: '/tasks/:id',
   TASK_HISTORY: '/tasks/history',
+  TASK_ACTIVE: '/tasks/active',
   
   // Settings
   SETTINGS: '/settings',
@@ -72,6 +75,8 @@ export const ROUTE_METADATA: Record<string, { label: string }> = {
   [ROUTES.SMS_CAMPAIGNS]: { label: 'SMS Campaigns' },
   [ROUTES.SMS_CREATE]: { label: 'Create Campaign' },
   [ROUTES.SMS_BULK]: { label: 'Send Bulk SMS' },
+  [ROUTES.SMS_OPTIMIZATION]: { label: 'SMS Optimization' },
+  [ROUTES.SMS_TEMPLATES]: { label: 'Campaign Templates' },
   [ROUTES.TASKS]: { label: 'Tasks' },
   'generate': { label: 'Generate' },
   'validate': { label: 'Validate' },
@@ -84,6 +89,7 @@ export const ROUTE_METADATA: Record<string, { label: string }> = {
   'view': { label: 'View' },
   'report': { label: 'Report' },
   'history': { label: 'History' },
+  'active': { label: 'Active Tasks' },
   'settings': { label: 'Settings' },
   'profile': { label: 'Profile' },
 }

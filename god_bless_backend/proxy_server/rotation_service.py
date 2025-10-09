@@ -148,6 +148,18 @@ class ProxyRotationService:
         
         return results
     
+    def record_success(self, proxy: ProxyServer, response_time: float = None):
+        """Record successful proxy usage"""
+        # The proxy.mark_success() is already called in the RotationManager
+        # This method is for consistency with SMTP service interface
+        pass
+    
+    def record_failure(self, proxy: ProxyServer, error: str, error_type: str = None):
+        """Record proxy failure"""
+        # The proxy.mark_failure() is already called in the RotationManager
+        # This method is for consistency with SMTP service interface
+        pass
+    
     def get_rotation_stats(self):
         """Get rotation statistics"""
         proxies = ProxyServer.objects.filter(

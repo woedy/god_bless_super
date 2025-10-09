@@ -34,9 +34,47 @@ export function TasksPage() {
               Monitor and manage background tasks and operations.
             </p>
           </div>
-          <Button variant="outline">
-            Refresh
-          </Button>
+          <div className="flex items-center space-x-3">
+            <Button 
+              variant="outline"
+              onClick={() => window.location.href = '/tasks/active'}
+            >
+              Active Tasks
+            </Button>
+            <Button 
+              variant="outline"
+              onClick={() => window.location.href = '/tasks/history'}
+            >
+              Task History
+            </Button>
+            <Button variant="outline">
+              Refresh
+            </Button>
+          </div>
+        </div>
+
+        {/* Navigation Tabs */}
+        <div className="border-b border-gray-200">
+          <nav className="-mb-px flex space-x-8">
+            <a
+              href="/tasks"
+              className="border-blue-500 text-blue-600 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+            >
+              Overview
+            </a>
+            <a
+              href="/tasks/active"
+              className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+            >
+              Active Tasks
+            </a>
+            <a
+              href="/tasks/history"
+              className="border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 whitespace-nowrap py-2 px-1 border-b-2 font-medium text-sm"
+            >
+              Task History
+            </a>
+          </nav>
         </div>
 
         {/* Task Stats */}

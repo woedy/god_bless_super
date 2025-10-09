@@ -4,8 +4,8 @@
  */
 
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts'
-import { ProtectedRoute, PublicRoute } from './components/common'
+import { AuthProvider, TaskMonitoringProvider, ErrorProvider, ThemeProvider } from './contexts'
+import { ProtectedRoute, PublicRoute, ErrorBoundary, ToastProvider } from './components/common'
 import { 
   LoginPage, 
   RegisterPage, 
@@ -26,7 +26,12 @@ import {
   CampaignDetailsPage,
   EditCampaignPage,
   BulkSMSPage,
+  OptimizationPage,
+  TemplatesPage,
   TasksPage,
+  TaskHistoryPage,
+  ActiveTasksPage,
+  TaskDetailsPage,
   LandingPage 
 } from './pages'
 import { ROUTES } from './config/routes'
@@ -36,9 +41,14 @@ import { ROUTES } from './config/routes'
  */
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <div className="min-h-screen bg-gray-50">
+    <ErrorBoundary level="global">
+      <ThemeProvider>
+        <Router>
+          <ErrorProvider>
+            <ToastProvider position="top-right" maxToasts={5}>
+              <AuthProvider>
+                <TaskMonitoringProvider>
+                  <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200">
           <Routes>
             {/* Public Routes - Only accessible when not authenticated */}
             <Route 
@@ -79,7 +89,9 @@ function App() {
               path={ROUTES.DASHBOARD}
               element={
                 <ProtectedRoute>
-                  <DashboardPage />
+                  <ErrorBoundary level="page">
+                    <DashboardPage />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               } 
             />
@@ -88,7 +100,9 @@ function App() {
               path={ROUTES.PROJECTS}
               element={
                 <ProtectedRoute>
-                  <ProjectsPage />
+                  <ErrorBoundary level="page">
+                    <ProjectsPage />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               } 
             />
@@ -124,7 +138,9 @@ function App() {
               path={ROUTES.PHONE_NUMBERS}
               element={
                 <ProtectedRoute>
-                  <PhoneNumbersPage />
+                  <ErrorBoundary level="page">
+                    <PhoneNumbersPage />
+                  </ErrorBoundary>
                 </ProtectedRoute>
               } 
             />
@@ -212,10 +228,55 @@ function App() {
             />
             
             <Route 
+              path={ROUTES.SMS_OPTIMIZATION}
+              element={
+                <ProtectedRoute>
+                  <OptimizationPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.SMS_TEMPLATES}
+              element={
+                <ProtectedRoute>
+                  <TemplatesPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
               path={ROUTES.TASKS}
               element={
                 <ProtectedRoute>
                   <TasksPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.TASK_HISTORY}
+              element={
+                <ProtectedRoute>
+                  <TaskHistoryPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path="/tasks/active"
+              element={
+                <ProtectedRoute>
+                  <ActiveTasksPage />
+                </ProtectedRoute>
+              } 
+            />
+            
+            <Route 
+              path={ROUTES.TASK_VIEW}
+              element={
+                <ProtectedRoute>
+                  <TaskDetailsPage />
                 </ProtectedRoute>
               } 
             />
@@ -226,9 +287,14 @@ function App() {
             {/* Catch all - redirect to dashboard if authenticated, otherwise to landing */}
             <Route path="*" element={<Navigate to={ROUTES.HOME} replace />} />
           </Routes>
-        </div>
-      </AuthProvider>
-    </Router>
+                  </div>
+                </TaskMonitoringProvider>
+              </AuthProvider>
+            </ToastProvider>
+          </ErrorProvider>
+        </Router>
+      </ThemeProvider>
+    </ErrorBoundary>
   )
 }
 

@@ -25,6 +25,10 @@ export { smsService, SMSService } from './sms'
 // WebSocket Service
 export { websocketManager, WebSocketManager } from './websocket'
 
+// Error Handler Service
+export { globalErrorHandler } from './errorHandler'
+export type { ErrorReport, ErrorType, ErrorSeverity } from './errorHandler'
+
 // Re-export for convenience
 import { apiClient } from './api'
 import { authService } from './auth'

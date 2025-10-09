@@ -20,6 +20,7 @@ from django.urls import include, path
 from django.conf.urls.static import static
 from god_bless_pro import views
 from god_bless_pro import health_checks
+from god_bless_pro import monitoring_views
 
 
 urlpatterns = [
@@ -30,6 +31,12 @@ urlpatterns = [
     path('api/health/ready/', health_checks.readiness_check, name='readiness_check'),
     path('api/health/live/', health_checks.liveness_check, name='liveness_check'),
     path('api/metrics/', health_checks.metrics, name='metrics'),
+    
+    # Comprehensive monitoring endpoints
+    path('api/monitoring/dashboard/', monitoring_views.system_health_dashboard, name='monitoring_dashboard'),
+    path('api/monitoring/service/<str:service_name>/', monitoring_views.service_health_details, name='service_health_details'),
+    path('api/monitoring/metrics/', monitoring_views.health_metrics_endpoint, name='health_metrics'),
+    path('api/monitoring/alerts/', monitoring_views.alerts_endpoint, name='alerts_endpoint'),
     
     # API endpoints
     path('api/accounts/', include('accounts.api.urls', 'accounts_api')),

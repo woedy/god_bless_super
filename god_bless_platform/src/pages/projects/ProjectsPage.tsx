@@ -128,23 +128,29 @@ export function ProjectsPage() {
         )}
 
         {/* Page Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col space-y-4 sm:flex-row sm:items-center sm:justify-between sm:space-y-0">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Projects</h1>
-            <p className="text-gray-600 mt-1">
+            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Projects</h1>
+            <p className="text-gray-600 mt-1 text-sm sm:text-base">
               Manage your phone number projects and campaigns.
             </p>
           </div>
-          <Button variant="primary" onClick={handleCreateProject}>
-            Create Project
+          <Button 
+            variant="primary" 
+            onClick={handleCreateProject}
+            responsive
+            className="w-full sm:w-auto"
+          >
+            <span className="sm:hidden">Create New Project</span>
+            <span className="hidden sm:inline">Create Project</span>
           </Button>
         </div>
 
         {/* Search and Filters */}
-        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
-          <div className="flex flex-col sm:flex-row gap-4">
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow-sm border border-gray-200">
+          <div className="space-y-4">
             {/* Search Input */}
-            <div className="flex-1">
+            <div className="w-full">
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -156,7 +162,7 @@ export function ProjectsPage() {
                   placeholder="Search projects by name or description..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  className="block w-full pl-10 pr-10 py-3 sm:py-2 border border-gray-300 rounded-lg text-base sm:text-sm leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 />
                 {searchQuery && (
                   <button
@@ -171,47 +177,60 @@ export function ProjectsPage() {
               </div>
             </div>
 
-            {/* Status Filter */}
-            <div className="sm:w-48">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as ProjectStatus | '')}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Statuses</option>
-                <option value="planning">Planning</option>
-                <option value="active">Active</option>
-                <option value="on_hold">On Hold</option>
-                <option value="completed">Completed</option>
-                <option value="inactive">Inactive</option>
-              </select>
-            </div>
+            {/* Filters Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {/* Status Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 sm:hidden">
+                  Status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value as ProjectStatus | '')}
+                  className="block w-full px-3 py-3 sm:py-2 text-base sm:text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All Statuses</option>
+                  <option value="planning">Planning</option>
+                  <option value="active">Active</option>
+                  <option value="on_hold">On Hold</option>
+                  <option value="completed">Completed</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
 
-            {/* Priority Filter */}
-            <div className="sm:w-48">
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value as ProjectPriority | '')}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-              >
-                <option value="">All Priorities</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-            </div>
+              {/* Priority Filter */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1 sm:hidden">
+                  Priority
+                </label>
+                <select
+                  value={priorityFilter}
+                  onChange={(e) => setPriorityFilter(e.target.value as ProjectPriority | '')}
+                  className="block w-full px-3 py-3 sm:py-2 text-base sm:text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="">All Priorities</option>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
 
-            {/* Clear Filters */}
-            {(searchQuery || statusFilter || priorityFilter) && (
-              <Button
-                variant="ghost"
-                onClick={handleClearFilters}
-                className="sm:w-auto"
-              >
-                Clear Filters
-              </Button>
-            )}
+              {/* Clear Filters */}
+              {(searchQuery || statusFilter || priorityFilter) && (
+                <div className="sm:col-span-2 lg:col-span-1">
+                  <Button
+                    variant="ghost"
+                    onClick={handleClearFilters}
+                    fullWidth
+                    responsive
+                    className="sm:w-auto"
+                  >
+                    Clear Filters
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Active Filters Display */}

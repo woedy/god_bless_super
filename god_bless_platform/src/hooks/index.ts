@@ -30,3 +30,10 @@ export {
   useTaskMonitoringContext, 
   useOptionalTaskMonitoringContext 
 } from './useTaskMonitoringContext'
+
+// Notification and feedback hooks
+export { useNotifications } from './useNotifications'
+export { useLoadingState, useSimpleLoading } from './useLoadingState'
+
+// Responsive design hooks
+export { useResponsive, useMediaQuery, responsiveUtils } from './useResponsive'

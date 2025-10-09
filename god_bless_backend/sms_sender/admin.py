@@ -1,5 +1,8 @@
 from django.contrib import admin
-from sms_sender.models import SMSCampaign, SMSMessage, SentSMS
+from sms_sender.models import (
+    SMSCampaign, SMSMessage, SentSMS, CampaignDeliverySettings, 
+    ServerUsageLog, CarrierPerformanceLog, RetryAttempt, CampaignTemplate
+)
 
 
 @admin.register(SMSCampaign)
@@ -51,7 +54,10 @@ class SMSMessageAdmin(admin.ModelAdmin):
             'fields': ('carrier', 'carrier_gateway')
         }),
         ('Delivery', {
-            'fields': ('delivery_status', 'smtp_server', 'proxy_used')
+            'fields': ('delivery_status', 'smtp_server', 'proxy_server', 'smtp_server_legacy', 'proxy_used_legacy')
+        }),
+        ('Performance Tracking', {
+            'fields': ('delivery_delay_applied', 'proxy_response_time', 'smtp_response_time', 'total_processing_time')
         }),
         ('Attempts', {
             'fields': ('send_attempts', 'last_attempt_at', 'error_message')
@@ -67,3 +73,113 @@ class SentSMSAdmin(admin.ModelAdmin):
     list_display = ('user', 'number', 'provider', 'sent')
     list_filter = ('sent',)
     search_fields = ('number', 'user__email', 'provider')
+
+
+@admin.register(CampaignDeliverySettings)
+class CampaignDeliverySettingsAdmin(admin.ModelAdmin):
+    list_display = ('campaign', 'use_proxy_rotation', 'proxy_rotation_strategy', 'use_smtp_rotation', 'smtp_rotation_strategy')
+    list_filter = ('use_proxy_rotation', 'use_smtp_rotation', 'proxy_rotation_strategy', 'smtp_rotation_strategy')
+    search_fields = ('campaign__name',)
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Campaign', {
+            'fields': ('campaign',)
+        }),
+        ('Proxy Settings', {
+            'fields': ('use_proxy_rotation', 'proxy_rotation_strategy')
+        }),
+        ('SMTP Settings', {
+            'fields': ('use_smtp_rotation', 'smtp_rotation_strategy')
+        }),
+        ('Delivery Timing', {
+            'fields': ('custom_delay_enabled', 'custom_delay_min', 'custom_delay_max', 'custom_random_seed')
+        }),
+        ('Smart Features', {
+            'fields': ('adaptive_optimization_enabled', 'carrier_optimization_enabled', 'timezone_optimization_enabled')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )
+
+
+@admin.register(ServerUsageLog)
+class ServerUsageLogAdmin(admin.ModelAdmin):
+    list_display = ('campaign', 'server_type', 'server_id', 'messages_processed', 'successful_messages', 'failed_messages', 'get_success_rate')
+    list_filter = ('server_type', 'campaign__status')
+    search_fields = ('campaign__name',)
+    readonly_fields = ('first_used', 'last_used')
+    
+    def get_success_rate(self, obj):
+        return f"{obj.get_success_rate():.1f}%"
+    get_success_rate.short_description = 'Success Rate'
+
+
+@admin.register(CarrierPerformanceLog)
+class CarrierPerformanceLogAdmin(admin.ModelAdmin):
+    list_display = ('carrier', 'proxy_server', 'smtp_server', 'success_rate', 'messages_sent', 'successful_deliveries', 'failed_deliveries')
+    list_filter = ('carrier', 'proxy_server', 'smtp_server')
+    search_fields = ('carrier',)
+    readonly_fields = ('last_updated', 'created_at')
+    
+    fieldsets = (
+        ('Server Configuration', {
+            'fields': ('carrier', 'proxy_server', 'smtp_server')
+        }),
+        ('Performance Metrics', {
+            'fields': ('success_rate', 'average_delivery_time', 'messages_sent', 'successful_deliveries', 'failed_deliveries')
+        }),
+        ('Timestamps', {
+            'fields': ('last_updated', 'created_at')
+        }),
+    )
+
+
+@admin.register(RetryAttempt)
+class RetryAttemptAdmin(admin.ModelAdmin):
+    list_display = ('message', 'attempt_number', 'error_type', 'scheduled_retry_time', 'completed', 'success')
+    list_filter = ('error_type', 'completed', 'success', 'scheduled_retry_time')
+    search_fields = ('message__phone_number', 'message__campaign__name', 'error_type')
+    readonly_fields = ('created_at', 'completion_time')
+    
+    fieldsets = (
+        ('Retry Information', {
+            'fields': ('message', 'attempt_number', 'error_type', 'error_message')
+        }),
+        ('Retry Configuration', {
+            'fields': ('retry_delay', 'scheduled_retry_time', 'retry_proxy_server', 'retry_smtp_server')
+        }),
+        ('Retry Result', {
+            'fields': ('completed', 'success', 'completion_time')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at',)
+        }),
+    )
+
+
+@admin.register(CampaignTemplate)
+class CampaignTemplateAdmin(admin.ModelAdmin):
+    list_display = ('name', 'user', 'category', 'usage_count', 'average_success_rate', 'is_public', 'is_system_template')
+    list_filter = ('category', 'is_public', 'is_system_template', 'created_at')
+    search_fields = ('name', 'user__email', 'description')
+    readonly_fields = ('usage_count', 'average_success_rate', 'created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Template Information', {
+            'fields': ('user', 'name', 'description', 'category')
+        }),
+        ('Template Settings', {
+            'fields': ('settings',)
+        }),
+        ('Performance Metrics', {
+            'fields': ('usage_count', 'average_success_rate')
+        }),
+        ('Sharing Settings', {
+            'fields': ('is_public', 'is_system_template')
+        }),
+        ('Timestamps', {
+            'fields': ('created_at', 'updated_at')
+        }),
+    )

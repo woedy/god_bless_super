@@ -165,8 +165,8 @@ export function Sidebar({ isCollapsed, onToggle: _onToggle, className = '' }: Si
             flex items-center px-3 py-2 text-sm font-medium rounded-lg transition-colors duration-200
             ${level === 0 ? 'mx-2' : 'mx-4 ml-6'}
             ${active 
-              ? 'bg-blue-100 text-blue-700 border-r-2 border-blue-700' 
-              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'
+              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border-r-2 border-blue-700 dark:border-blue-400' 
+              : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100'
             }
             ${isCollapsed && level === 0 ? 'justify-center' : ''}
           `}
@@ -205,7 +205,7 @@ export function Sidebar({ isCollapsed, onToggle: _onToggle, className = '' }: Si
 
         {/* Tooltip for collapsed sidebar */}
         {isCollapsed && level === 0 && hoveredItem === item.id && (
-          <div className="absolute left-16 top-0 z-50 px-2 py-1 bg-gray-900 text-white text-sm rounded shadow-lg whitespace-nowrap">
+          <div className="absolute left-16 top-0 z-50 px-2 py-1 bg-gray-900 dark:bg-gray-700 text-white dark:text-gray-100 text-sm rounded shadow-lg whitespace-nowrap">
             {item.label}
           </div>
         )}
@@ -223,19 +223,19 @@ export function Sidebar({ isCollapsed, onToggle: _onToggle, className = '' }: Si
   return (
     <div 
       className={`
-        fixed left-0 top-0 h-full bg-white border-r border-gray-200 shadow-sm z-40 transition-all duration-300
+        fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm z-40 transition-all duration-300
         ${isCollapsed ? 'w-16' : 'w-64'}
         ${className}
       `}
     >
       {/* Logo/Brand */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200">
+      <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
         {!isCollapsed && (
           <div className="flex items-center">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">GB</span>
             </div>
-            <span className="ml-2 text-lg font-semibold text-gray-900">
+            <span className="ml-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
               God Bless Platform
             </span>
           </div>
@@ -256,19 +256,19 @@ export function Sidebar({ isCollapsed, onToggle: _onToggle, className = '' }: Si
 
       {/* User Info */}
       {user && (
-        <div className="border-t border-gray-200 p-4">
+        <div className="border-t border-gray-200 dark:border-gray-700 p-4">
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-              <span className="text-sm font-medium text-gray-700">
+            <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
+              <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                 {user.firstName?.[0] || user.email[0].toUpperCase()}
               </span>
             </div>
             {!isCollapsed && (
               <div className="ml-3 flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                   {user.firstName ? `${user.firstName} ${user.lastName}` : user.email}
                 </p>
-                <p className="text-xs text-gray-500 truncate">
+                <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
                   {user.email}
                 </p>
               </div>

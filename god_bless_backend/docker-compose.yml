@@ -1,127 +1,177 @@
-version: "3.8"
-
 services:
-  # Redis
+  # Redis Cache & Message Broker
   redis:
     image: redis:alpine
-    container_name: god_bless_redis
-    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD:-development-redis-password-123}
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
 
-  # Database Postgres
+  # PostgreSQL Database
   db:
-    image: postgres
+    image: postgres:15-alpine
     volumes:
       - postgres_data:/var/lib/postgresql/data
     environment:
-      - POSTGRES_DB=god_bless_postgres
-      - POSTGRES_USER=god_bless_postgres
-      - POSTGRES_PASSWORD=god_bless_postgres
-    container_name: god_bless_postgres_db
-    restart: always
+      - POSTGRES_DB=${POSTGRES_DB:-god_bless_postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-god_bless_postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-god_bless_postgres}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U god_bless_postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
-  # Django Application
-  god_bless_app:
+  # Django Backend Application
+  backend:
     build:
       context: .
-    volumes:
-      - .:/god_bless_django
-      - ./static_cdn:/var/lib/static_cdn
     ports:
-      - 6161:6161
-    container_name: god_bless_app
-    command: daphne -b 0.0.0.0 -p 6161 god_bless_pro.asgi:application
+      - "${PORT:-6161}:6161"
+    command:
+      [
+        "/bin/bash",
+        "-c",
+        "./docker-entrypoint-sqlite.sh daphne -b 0.0.0.0 -p 6161 god_bless_pro.asgi:application",
+      ]
     environment:
       - DOCKER_ENV=true
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-development-key-change-in-production-12345678901234567890}
+      - DEBUG=${DEBUG:-True}
+      - USE_POSTGRES=${USE_POSTGRES:-false}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - POSTGRES_DB=god_bless_postgres
-      - POSTGRES_USER=god_bless_postgres
-      - POSTGRES_PASSWORD=god_bless_postgres
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-development-redis-password-123}
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-development-redis-password-123}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-development-redis-password-123}@redis:6379/0
+      - POSTGRES_DB=${POSTGRES_DB:-god_bless_postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-god_bless_postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-god_bless_postgres}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
-      - CREATE_SUPERUSER=false
-      - LOAD_INITIAL_DATA=false
+      - EMAIL_HOST=${EMAIL_HOST:-smtp.gmail.com}
+      - EMAIL_HOST_USER=${EMAIL_HOST_USER:-test@example.com}
+      - EMAIL_HOST_PASSWORD=${EMAIL_HOST_PASSWORD:-development-email-password-123}
+      - EMAIL_PORT=${EMAIL_PORT:-587}
+      - EMAIL_USE_TLS=${EMAIL_USE_TLS:-True}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      - CREATE_SUPERUSER=${CREATE_SUPERUSER:-false}
+      - LOAD_INITIAL_DATA=${LOAD_INITIAL_DATA:-false}
     depends_on:
-      - db
-      - redis
-    restart: always
-
-  # React Application (New Platform)
-  god_bless_platform:
-    build:
-      context: ../god_bless_platform
-      dockerfile: Dockerfile.dev
-    ports:
-      - "5173:5173" # Vite dev server port
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
     volumes:
-      - ../god_bless_platform:/app
+      # Development: mount source code for hot reload
+      - ${MOUNT_SOURCE:-.}:/god_bless_django
+      # Mount SQLite database file specifically
+      - ./db.sqlite3:/god_bless_django/db.sqlite3
+      # Production: use named volumes for static/media files
+      - static_files:/god_bless_django/static_cdn
+      - media_files:/god_bless_django/media
+
+  # React Frontend Application (Development only)
+  frontend:
+    build:
+      context: ${FRONTEND_CONTEXT:-../god_bless_platform}
+      dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile.dev}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ${FRONTEND_CONTEXT:-../god_bless_platform}:/app
       - /app/node_modules
     environment:
-      - VITE_API_URL=http://localhost:6161/api
-      - VITE_WS_URL=ws://localhost:6161/ws/
-      - VITE_APP_NAME=God Bless Platform
-      - VITE_VERSION=1.0.0
-      - VITE_ENVIRONMENT=development
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:6161/api}
+      - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:6161/ws/}
+      - VITE_APP_NAME=${VITE_APP_NAME:-God Bless Platform}
+      - VITE_VERSION=${VITE_VERSION:-1.0.0}
+      - VITE_ENVIRONMENT=${VITE_ENVIRONMENT:-development}
     depends_on:
-      - god_bless_app
-    restart: always
+      - backend
+    restart: unless-stopped
+    profiles:
+      - development
 
   # Celery Worker
   celery:
-    restart: always
     build:
       context: .
-    command: celery -A god_bless_pro worker -l DEBUG
-    volumes:
-      - .:/god_bless_django
-    container_name: god_bless_celery
+    command:
+      [
+        "/bin/bash",
+        "-c",
+        "sleep 10 && celery -A god_bless_pro worker -l ${CELERY_LOG_LEVEL:-INFO}",
+      ]
     environment:
       - DOCKER_ENV=true
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-development-key-change-in-production-12345678901234567890}
+      - DEBUG=${DEBUG:-True}
+      - USE_POSTGRES=${USE_POSTGRES:-false}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - POSTGRES_DB=god_bless_postgres
-      - POSTGRES_USER=god_bless_postgres
-      - POSTGRES_PASSWORD=god_bless_postgres
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-development-redis-password-123}
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-development-redis-password-123}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-development-redis-password-123}@redis:6379/0
+      - POSTGRES_DB=${POSTGRES_DB:-god_bless_postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-god_bless_postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-god_bless_postgres}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
-      - CREATE_SUPERUSER=false
-      - LOAD_INITIAL_DATA=false
+      - CREATE_SUPERUSER=${CREATE_SUPERUSER:-false}
+      - LOAD_INITIAL_DATA=${LOAD_INITIAL_DATA:-false}
     depends_on:
-      - db
       - redis
-      - god_bless_app
+      - backend
+    restart: unless-stopped
+    volumes:
+      - ${MOUNT_SOURCE:-.}:/god_bless_django
+      - ./db.sqlite3:/god_bless_django/db.sqlite3
+      - media_files:/god_bless_django/media
 
-  # Celery Beat
+  # Celery Beat Scheduler
   celery-beat:
-    restart: always
     build:
       context: .
-    command: celery -A god_bless_pro beat -l DEBUG
-    volumes:
-      - .:/god_bless_django
-    container_name: god_bless_celery_beat
+    command:
+      [
+        "/bin/bash",
+        "-c",
+        "sleep 15 && celery -A god_bless_pro beat -l ${CELERY_LOG_LEVEL:-INFO}",
+      ]
     environment:
       - DOCKER_ENV=true
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-development-key-change-in-production-12345678901234567890}
+      - DEBUG=${DEBUG:-True}
+      - USE_POSTGRES=${USE_POSTGRES:-false}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - CELERY_BROKER_URL=redis://redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://redis:6379/0
-      - POSTGRES_DB=god_bless_postgres
-      - POSTGRES_USER=god_bless_postgres
-      - POSTGRES_PASSWORD=god_bless_postgres
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-development-redis-password-123}
+      - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-development-redis-password-123}@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-development-redis-password-123}@redis:6379/0
+      - POSTGRES_DB=${POSTGRES_DB:-god_bless_postgres}
+      - POSTGRES_USER=${POSTGRES_USER:-god_bless_postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-god_bless_postgres}
       - POSTGRES_HOST=db
       - POSTGRES_PORT=5432
-      - CREATE_SUPERUSER=false
-      - LOAD_INITIAL_DATA=false
+      - CREATE_SUPERUSER=${CREATE_SUPERUSER:-false}
+      - LOAD_INITIAL_DATA=${LOAD_INITIAL_DATA:-false}
     depends_on:
-      - db
       - redis
-      - god_bless_app
+      - backend
+    restart: unless-stopped
+    volumes:
+      - ${MOUNT_SOURCE:-.}:/god_bless_django
+      - ./db.sqlite3:/god_bless_django/db.sqlite3
 
 volumes:
-  static_cdn:
+  static_files:
+  media_files:
   postgres_data:
+  redis_data:
