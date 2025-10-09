@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Frontend Export Filters</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+        }
+        .filter-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        select, input {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .export-btn {
+            background: #28a745;
+        }
+        .export-btn:hover {
+            background: #1e7e34;
+        }
+        .results {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin-top: 15px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Test Frontend Export Filters</h1>
+    <p>This page simulates the export functionality with different filter combinations to test mobile/landline filtering.</p>
+
+    <div class="test-section">
+        <h2>📱 Filter Configuration</h2>
+        <div class="filter-controls">
+            <div class="control-group">
+                <label for="projectId">Project ID:</label>
+                <input type="text" id="projectId" placeholder="Enter project ID">
+            </div>
+            <div class="control-group">
+                <label for="lineType">Line Type:</label>
+                <select id="lineType">
+                    <option value="">All Line Types</option>
+                    <option value="mobile">Mobile Only</option>
+                    <option value="landline">Landline Only</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="isValid">Validation Status:</label>
+                <select id="isValid">
+                    <option value="">All Numbers</option>
+                    <option value="true">Valid Only</option>
+                    <option value="false">Invalid Only</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="carrier">Carrier:</label>
+                <input type="text" id="carrier" placeholder="e.g., AT&T, Verizon">
+            </div>
+            <div class="control-group">
+                <label for="format">Export Format:</label>
+                <select id="format">
+                    <option value="csv">CSV</option>
+                    <option value="txt">TXT</option>
+                    <option value="json">JSON</option>
+                </select>
+            </div>
+        </div>
+        
+        <button onclick="testExportFilters()" class="export-btn">🚀 Test Export with Filters</button>
+        <button onclick="clearResults()">🧹 Clear Results</button>
+    </div>
+
+    <div class="test-section">
+        <h2>📊 Test Results</h2>
+        <div id="results" class="results">
+Ready to test export filters...
+
+Instructions:
+1. Enter a valid Project ID from your system
+2. Select the line type filter (mobile, landline, or both)
+3. Configure other filters as needed
+4. Click "Test Export with Filters"
+5. Check the results to verify the correct filters are applied
+        </div>
+    </div>
+
+    <div class="test-section">
+        <h2>🔍 Filter State Preview</h2>
+        <div id="filterPreview" class="results">
+No filters configured yet...
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = 'http://localhost:8000/api'
+        
+        // Get auth token from localStorage (if available)
+        function getAuthToken() {
+            try {
+                return localStorage.getItem('god_bless_auth_token') || 'your_auth_token_here'
+            } catch (error) {
+                return 'your_auth_token_here'
+            }
+        }
+        
+        // Get user ID from localStorage (if available)
+        function getUserId() {
+            try {
+                const userData = localStorage.getItem('god_bless_user_data')
+                if (userData) {
+                    const user = JSON.parse(userData)
+                    return user.user_id || user.id || 'your_user_id_here'
+                }
+            } catch (error) {
+                console.error('Failed to get user ID:', error)
+            }
+            return 'your_user_id_here'
+        }
+
+        // Update filter preview when inputs change
+        function updateFilterPreview() {
+            const filters = getCurrentFilters()
+            const preview = {
+                projectId: document.getElementById('projectId').value || 'Not specified',
+                filters: filters,
+                exportParams: {
+                    format: document.getElementById('format').value,
+                    includeInvalid: false,
+                    includeMetadata: false
+                }
+            }
+            
+            document.getElementById('filterPreview').textContent = 
+                'Current Filter Configuration:\n' + JSON.stringify(preview, null, 2)
+        }
+
+        // Get current filter values
+        function getCurrentFilters() {
+            const filters = {}
+            
+            const lineType = document.getElementById('lineType').value
+            if (lineType) filters.lineType = lineType
+            
+            const isValid = document.getElementById('isValid').value
+            if (isValid) filters.isValid = isValid === 'true'
+            
+            const carrier = document.getElementById('carrier').value
+            if (carrier) filters.carrier = carrier
+            
+            return filters
+        }
+
+        // Test export with current filters
+        async function testExportFilters() {
+            const resultsDiv = document.getElementById('results')
+            resultsDiv.className = 'results'
+            resultsDiv.textContent = '🔄 Testing export with filters...\n'
+            
+            try {
+                const projectId = document.getElementById('projectId').value
+                if (!projectId) {
+                    throw new Error('Project ID is required')
+                }
+                
+                const filters = getCurrentFilters()
+                const format = document.getElementById('format').value
+                
+                // Build request payload (simulating the frontend service)
+                const requestData = {
+                    user_id: getUserId(),
+                    project_id: projectId,
+                    format: format,
+                    include_invalid: false,
+                    include_metadata: false,
+                    filters: {}
+                }
+                
+                // Map frontend filters to backend format
+                if (filters.isValid !== undefined) {
+                    requestData.filters.valid_number = filters.isValid.toString()
+                }
+                if (filters.carrier) {
+                    requestData.filters.carrier = filters.carrier
+                }
+                if (filters.lineType) {
+                    requestData.filters.type = filters.lineType // Map lineType to type
+                }
+                
+                resultsDiv.textContent += `📤 Sending request to: ${API_BASE_URL}/phone-generator/export/\n`
+                resultsDiv.textContent += `📋 Request payload:\n${JSON.stringify(requestData, null, 2)}\n\n`
+                
+                const response = await fetch(`${API_BASE_URL}/phone-generator/export/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Token ${getAuthToken()}`
+                    },
+                    body: JSON.stringify(requestData)
+                })
+                
+                const result = await response.json()
+                
+                resultsDiv.textContent += `📥 Response status: ${response.status}\n`
+                resultsDiv.textContent += `📊 Response data:\n${JSON.stringify(result, null, 2)}\n\n`
+                
+                if (result.success && result.data) {
+                    resultsDiv.className = 'results success'
+                    resultsDiv.textContent += '✅ Export test successful!\n'
+                    
+                    if (result.data.content) {
+                        resultsDiv.textContent += `📄 Content preview (first 200 chars):\n${result.data.content.substring(0, 200)}...\n`
+                        resultsDiv.textContent += `📈 Total records: ${result.data.total_records}\n`
+                        
+                        // Analyze content for line types
+                        const lines = result.data.content.split('\n')
+                        const mobileCount = lines.filter(line => line.toLowerCase().includes('mobile')).length
+                        const landlineCount = lines.filter(line => line.toLowerCase().includes('landline')).length
+                        
+                        resultsDiv.textContent += `\n📊 Content Analysis:\n`
+                        resultsDiv.textContent += `- Mobile numbers found: ${mobileCount}\n`
+                        resultsDiv.textContent += `- Landline numbers found: ${landlineCount}\n`
+                        
+                        if (filters.lineType === 'mobile' && landlineCount > 0) {
+                            resultsDiv.textContent += `⚠️  WARNING: Mobile filter applied but landline numbers found!\n`
+                        } else if (filters.lineType === 'landline' && mobileCount > 0) {
+                            resultsDiv.textContent += `⚠️  WARNING: Landline filter applied but mobile numbers found!\n`
+                        } else {
+                            resultsDiv.textContent += `✅ Filter appears to be working correctly!\n`
+                        }
+                    } else if (result.data.task_id) {
+                        resultsDiv.textContent += `⏳ Background task started: ${result.data.task_id}\n`
+                        resultsDiv.textContent += `💡 Use the task ID to track progress in the main application\n`
+                    }
+                } else {
+                    resultsDiv.className = 'results error'
+                    resultsDiv.textContent += '❌ Export test failed!\n'
+                    resultsDiv.textContent += `Error: ${result.message || 'Unknown error'}\n`
+                    if (result.errors) {
+                        resultsDiv.textContent += `Details: ${JSON.stringify(result.errors, null, 2)}\n`
+                    }
+                }
+                
+            } catch (error) {
+                resultsDiv.className = 'results error'
+                resultsDiv.textContent += `❌ Test failed with error: ${error.message}\n`
+                console.error('Export test error:', error)
+            }
+        }
+
+        // Clear results
+        function clearResults() {
+            document.getElementById('results').className = 'results'
+            document.getElementById('results').textContent = 'Results cleared. Ready for next test...'
+        }
+
+        // Add event listeners for real-time filter preview
+        document.addEventListener('DOMContentLoaded', function() {
+            const inputs = ['projectId', 'lineType', 'isValid', 'carrier', 'format']
+            inputs.forEach(id => {
+                document.getElementById(id).addEventListener('change', updateFilterPreview)
+                document.getElementById(id).addEventListener('input', updateFilterPreview)
+            })
+            
+            // Initial preview
+            updateFilterPreview()
+        })
+    </script>
+</body>
+</html>

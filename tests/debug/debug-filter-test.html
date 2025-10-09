@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Filter Debug Test</title>
+</head>
+<body>
+    <h1>Phone Number Filter Debug Test</h1>
+    <div id="output"></div>
+    
+    <script>
+        // Test the filter functionality
+        async function testFilters() {
+            const output = document.getElementById('output');
+            output.innerHTML = '<p>Testing filters...</p>';
+            
+            // Replace these with your actual values
+            const baseUrl = 'http://localhost:8000/';
+            const userToken = 'your-token-here';
+            const userID = 'your-user-id';
+            const projectID = 'your-project-id';
+            
+            // Test different filter combinations
+            const tests = [
+                {
+                    name: 'No filters',
+                    params: {
+                        user_id: userID,
+                        project_id: projectID,
+                        page: '1'
+                    }
+                },
+                {
+                    name: 'Valid numbers only',
+                    params: {
+                        user_id: userID,
+                        project_id: projectID,
+                        valid_number: 'true',
+                        page: '1'
+                    }
+                },
+                {
+                    name: 'Invalid numbers only',
+                    params: {
+                        user_id: userID,
+                        project_id: projectID,
+                        valid_number: 'false',
+                        page: '1'
+                    }
+                },
+                {
+                    name: 'Mobile numbers only',
+                    params: {
+                        user_id: userID,
+                        project_id: projectID,
+                        type: 'Mobile',
+                        page: '1'
+                    }
+                },
+                {
+                    name: 'AT&T carrier',
+                    params: {
+                        user_id: userID,
+                        project_id: projectID,
+                        carrier: 'AT&T',
+                        page: '1'
+                    }
+                }
+            ];
+            
+            for (const test of tests) {
+                try {
+                    const params = new URLSearchParams(test.params);
+                    const url = `${baseUrl}api/phone-generator/list-numbers/?${params}`;
+                    
+                    console.log(`Testing: ${test.name}`);
+                    console.log(`URL: ${url}`);
+                    
+                    const response = await fetch(url, {
+                        headers: {
+                            'Authorization': `Token ${userToken}`,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const result = await response.json();
+                        const count = result.data?.numbers?.length || 0;
+                        output.innerHTML += `<p><strong>${test.name}:</strong> ${count} numbers found</p>`;
+                        console.log(`${test.name}: ${count} numbers found`);
+                    } else {
+                        output.innerHTML += `<p><strong>${test.name}:</strong> Error ${response.status}</p>`;
+                        console.error(`${test.name}: Error ${response.status}`);
+                    }
+                } catch (error) {
+                    output.innerHTML += `<p><strong>${test.name}:</strong> ${error.message}</p>`;
+                    console.error(`${test.name}: ${error.message}`);
+                }
+            }
+            
+            output.innerHTML += '<p>Testing complete! Check console for details.</p>';
+        }
+        
+        // Uncomment and update credentials to run the test
+        // testFilters();
+        
+        console.log('Filter test page loaded. Update credentials in the script and call testFilters() to run tests.');
+    </script>
+</body>
+</html>

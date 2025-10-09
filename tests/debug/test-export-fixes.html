@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Export Fixes</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .test-header {
+            background: #007bff;
+            color: white;
+            padding: 15px;
+            border-radius: 8px 8px 0 0;
+            margin: -20px -20px 20px -20px;
+        }
+        .test-controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+        label {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #333;
+        }
+        select, input, button {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        button {
+            background: #28a745;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        button:hover {
+            background: #218838;
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+        }
+        .results {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 15px;
+            margin-top: 15px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success {
+            background: #d4edda;
+            border-color: #c3e6cb;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border-color: #f5c6cb;
+            color: #721c24;
+        }
+        .info {
+            background: #d1ecf1;
+            border-color: #bee5eb;
+            color: #0c5460;
+        }
+        .count-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007bff;
+            text-align: center;
+            padding: 10px;
+            background: #e7f3ff;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .format-indicator {
+            display: inline-block;
+            padding: 4px 8px;
+            background: #6f42c1;
+            color: white;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Export Fixes Test</h1>
+    <p>This page tests the two main export fixes: correct count display and proper file format download.</p>
+
+    <div class="test-card">
+        <div class="test-header">
+            <h2>📊 Test 1: Export Count Accuracy</h2>
+            <p>Verify that the export dialog shows the correct filtered count, not the total project count</p>
+        </div>
+        
+        <div class="test-controls">
+            <div class="control-group">
+                <label for="projectId1">Project ID:</label>
+                <input type="text" id="projectId1" placeholder="Enter project ID">
+            </div>
+            <div class="control-group">
+                <label for="lineType1">Line Type Filter:</label>
+                <select id="lineType1">
+                    <option value="">All Types</option>
+                    <option value="mobile">Mobile Only</option>
+                    <option value="landline">Landline Only</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="validStatus1">Validation Status:</label>
+                <select id="validStatus1">
+                    <option value="">All Numbers</option>
+                    <option value="true">Valid Only</option>
+                    <option value="false">Invalid Only</option>
+                </select>
+            </div>
+        </div>
+        
+        <button onclick="testExportCount()" id="countTestBtn">🔍 Test Export Count</button>
+        
+        <div id="countResults" class="results">
+Ready to test export count accuracy...
+
+Instructions:
+1. Enter a valid Project ID
+2. Select filters (line type, validation status)
+3. Click "Test Export Count"
+4. Compare the filtered count vs total project count
+        </div>
+    </div>
+
+    <div class="test-card">
+        <div class="test-header">
+            <h2>📁 Test 2: File Format Download</h2>
+            <p>Verify that exported files have the correct format and can be downloaded properly</p>
+        </div>
+        
+        <div class="test-controls">
+            <div class="control-group">
+                <label for="projectId2">Project ID:</label>
+                <input type="text" id="projectId2" placeholder="Enter project ID">
+            </div>
+            <div class="control-group">
+                <label for="exportFormat">Export Format:</label>
+                <select id="exportFormat">
+                    <option value="csv">CSV</option>
+                    <option value="txt">TXT</option>
+                    <option value="json">JSON</option>
+                    <option value="doc">DOC</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <label for="lineType2">Line Type Filter:</label>
+                <select id="lineType2">
+                    <option value="">All Types</option>
+                    <option value="mobile">Mobile Only</option>
+                    <option value="landline">Landline Only</option>
+                </select>
+            </div>
+        </div>
+        
+        <button onclick="testFileDownload()" id="downloadTestBtn">📥 Test File Download</button>
+        
+        <div id="downloadResults" class="results">
+Ready to test file format download...
+
+Instructions:
+1. Enter a valid Project ID
+2. Select the export format you want to test
+3. Optionally apply filters
+4. Click "Test File Download"
+5. Verify the file downloads with correct format and extension
+        </div>
+    </div>
+
+    <div class="test-card">
+        <div class="test-header">
+            <h2>🎯 Combined Test</h2>
+            <p>Test both fixes together in a realistic scenario</p>
+        </div>
+        
+        <div class="test-controls">
+            <div class="control-group">
+                <label for="projectId3">Project ID:</label>
+                <input type="text" id="projectId3" placeholder="Enter project ID">
+            </div>
+        </div>
+        
+        <button onclick="runCombinedTest()" id="combinedTestBtn">🚀 Run Combined Test</button>
+        
+        <div id="combinedResults" class="results">
+Ready to run combined test...
+
+This test will:
+1. Get total project count
+2. Apply mobile filter and get filtered count
+3. Export mobile numbers in CSV format
+4. Verify count accuracy and file format
+        </div>
+    </div>
+
+    <script>
+        const API_BASE_URL = 'http://localhost:8000/api'
+        
+        function getAuthToken() {
+            try {
+                return localStorage.getItem('god_bless_auth_token') || 'your_auth_token_here'
+            } catch (error) {
+                return 'your_auth_token_here'
+            }
+        }
+        
+        function getUserId() {
+            try {
+                const userData = localStorage.getItem('god_bless_user_data')
+                if (userData) {
+                    const user = JSON.parse(userData)
+                    return user.user_id || user.id || 'your_user_id_here'
+                }
+            } catch (error) {
+                console.error('Failed to get user ID:', error)
+            }
+            return 'your_user_id_here'
+        }
+
+        async function getPhoneNumberCount(projectId, filters = {}) {
+            const params = new URLSearchParams({
+                user_id: getUserId(),
+                project_id: projectId,
+                page: '1',
+                page_size: '1'
+            })
+            
+            // Add filters
+            if (filters.lineType) params.append('type', filters.lineType)
+            if (filters.isValid !== undefined) params.append('valid_number', filters.isValid.toString())
+            
+            const response = await fetch(`${API_BASE_URL}/phone-generator/list-numbers/?${params}`, {
+                headers: {
+                    'Authorization': `Token ${getAuthToken()}`
+                }
+            })
+            
+            const result = await response.json()
+            return result
+        }
+
+        async function exportPhoneNumbers(projectId, format, filters = {}) {
+            const requestData = {
+                user_id: getUserId(),
+                project_id: projectId,
+                format: format,
+                include_invalid: false,
+                include_metadata: false,
+                filters: {}
+            }
+            
+            // Map filters
+            if (filters.lineType) requestData.filters.type = filters.lineType
+            if (filters.isValid !== undefined) requestData.filters.valid_number = filters.isValid.toString()
+            
+            const response = await fetch(`${API_BASE_URL}/phone-generator/export/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Token ${getAuthToken()}`
+                },
+                body: JSON.stringify(requestData)
+            })
+            
+            const result = await response.json()
+            return { response, result }
+        }
+
+        function downloadFile(content, filename, mimeType) {
+            const blob = new Blob([content], { type: mimeType })
+            const url = URL.createObjectURL(blob)
+            const link = document.createElement('a')
+            link.href = url
+            link.download = filename
+            document.body.appendChild(link)
+            link.click()
+            document.body.removeChild(link)
+            URL.revokeObjectURL(url)
+        }
+
+        async function testExportCount() {
+            const resultsDiv = document.getElementById('countResults')
+            const btn = document.getElementById('countTestBtn')
+            
+            btn.disabled = true
+            resultsDiv.className = 'results info'
+            resultsDiv.textContent = '🔄 Testing export count accuracy...\n'
+            
+            try {
+                const projectId = document.getElementById('projectId1').value
+                if (!projectId) {
+                    throw new Error('Project ID is required')
+                }
+                
+                const lineType = document.getElementById('lineType1').value
+                const validStatus = document.getElementById('validStatus1').value
+                
+                const filters = {}
+                if (lineType) filters.lineType = lineType
+                if (validStatus) filters.isValid = validStatus === 'true'
+                
+                resultsDiv.textContent += `📋 Testing with filters: ${JSON.stringify(filters)}\n\n`
+                
+                // Get total count (no filters)
+                resultsDiv.textContent += '1️⃣ Getting total project count...\n'
+                const totalResponse = await getPhoneNumberCount(projectId)
+                const totalCount = totalResponse.success ? totalResponse.data.pagination.count : 0
+                resultsDiv.textContent += `   Total project numbers: ${totalCount}\n\n`
+                
+                // Get filtered count
+                resultsDiv.textContent += '2️⃣ Getting filtered count...\n'
+                const filteredResponse = await getPhoneNumberCount(projectId, filters)
+                const filteredCount = filteredResponse.success ? filteredResponse.data.pagination.count : 0
+                resultsDiv.textContent += `   Filtered numbers: ${filteredCount}\n\n`
+                
+                // Compare counts
+                resultsDiv.textContent += '📊 Count Comparison:\n'
+                resultsDiv.textContent += `   Total: ${totalCount}\n`
+                resultsDiv.textContent += `   Filtered: ${filteredCount}\n`
+                resultsDiv.textContent += `   Difference: ${totalCount - filteredCount}\n\n`
+                
+                if (Object.keys(filters).length === 0) {
+                    if (totalCount === filteredCount) {
+                        resultsDiv.className = 'results success'
+                        resultsDiv.textContent += '✅ PASS: No filters applied, counts match correctly\n'
+                    } else {
+                        resultsDiv.className = 'results error'
+                        resultsDiv.textContent += '❌ FAIL: No filters but counts don\'t match\n'
+                    }
+                } else {
+                    if (filteredCount <= totalCount) {
+                        resultsDiv.className = 'results success'
+                        resultsDiv.textContent += '✅ PASS: Filtered count is less than or equal to total\n'
+                        resultsDiv.textContent += '✅ Export dialog should show: ' + filteredCount + ' numbers\n'
+                    } else {
+                        resultsDiv.className = 'results error'
+                        resultsDiv.textContent += '❌ FAIL: Filtered count is greater than total count\n'
+                    }
+                }
+                
+            } catch (error) {
+                resultsDiv.className = 'results error'
+                resultsDiv.textContent += `❌ Test failed: ${error.message}\n`
+            } finally {
+                btn.disabled = false
+            }
+        }
+
+        async function testFileDownload() {
+            const resultsDiv = document.getElementById('downloadResults')
+            const btn = document.getElementById('downloadTestBtn')
+            
+            btn.disabled = true
+            resultsDiv.className = 'results info'
+            resultsDiv.textContent = '🔄 Testing file format download...\n'
+            
+            try {
+                const projectId = document.getElementById('projectId2').value
+                const format = document.getElementById('exportFormat').value
+                const lineType = document.getElementById('lineType2').value
+                
+                if (!projectId) {
+                    throw new Error('Project ID is required')
+                }
+                
+                const filters = {}
+                if (lineType) filters.lineType = lineType
+                
+                resultsDiv.textContent += `📋 Export settings:\n`
+                resultsDiv.textContent += `   Format: ${format.toUpperCase()}\n`
+                resultsDiv.textContent += `   Filters: ${JSON.stringify(filters)}\n\n`
+                
+                resultsDiv.textContent += '📤 Requesting export...\n'
+                const { response, result } = await exportPhoneNumbers(projectId, format, filters)
+                
+                resultsDiv.textContent += `📥 Response status: ${response.status}\n`
+                resultsDiv.textContent += `📋 Response message: ${result.message}\n\n`
+                
+                if (result.success && result.data && result.data.content) {
+                    const content = result.data.content
+                    const filename = result.data.filename || `test_export.${format}`
+                    const actualFormat = result.data.format || format
+                    
+                    resultsDiv.textContent += '📄 Export details:\n'
+                    resultsDiv.textContent += `   Filename: ${filename}\n`
+                    resultsDiv.textContent += `   Format: ${actualFormat}\n`
+                    resultsDiv.textContent += `   Content length: ${content.length} characters\n`
+                    resultsDiv.textContent += `   Records: ${result.data.total_records}\n\n`
+                    
+                    // Verify format
+                    const expectedExtension = `.${format}`
+                    const hasCorrectExtension = filename.endsWith(expectedExtension)
+                    
+                    if (hasCorrectExtension && actualFormat === format) {
+                        resultsDiv.className = 'results success'
+                        resultsDiv.textContent += '✅ PASS: File format is correct\n'
+                        
+                        // Trigger download
+                        const mimeTypes = {
+                            'csv': 'text/csv',
+                            'txt': 'text/plain',
+                            'json': 'application/json',
+                            'doc': 'application/msword'
+                        }
+                        
+                        downloadFile(content, filename, mimeTypes[format])
+                        resultsDiv.textContent += `📥 File downloaded: ${filename}\n`
+                        resultsDiv.textContent += '✅ Check your downloads folder for the file\n'
+                        
+                    } else {
+                        resultsDiv.className = 'results error'
+                        resultsDiv.textContent += '❌ FAIL: File format mismatch\n'
+                        resultsDiv.textContent += `   Expected: ${format} with ${expectedExtension}\n`
+                        resultsDiv.textContent += `   Got: ${actualFormat} with filename ${filename}\n`
+                    }
+                    
+                } else if (result.data && result.data.task_id) {
+                    resultsDiv.className = 'results info'
+                    resultsDiv.textContent += '⏳ Background task started\n'
+                    resultsDiv.textContent += `   Task ID: ${result.data.task_id}\n`
+                    resultsDiv.textContent += '💡 Check the main app for task completion\n'
+                    
+                } else {
+                    resultsDiv.className = 'results error'
+                    resultsDiv.textContent += '❌ FAIL: No content received\n'
+                    resultsDiv.textContent += `   Response: ${JSON.stringify(result, null, 2)}\n`
+                }
+                
+            } catch (error) {
+                resultsDiv.className = 'results error'
+                resultsDiv.textContent += `❌ Test failed: ${error.message}\n`
+            } finally {
+                btn.disabled = false
+            }
+        }
+
+        async function runCombinedTest() {
+            const resultsDiv = document.getElementById('combinedResults')
+            const btn = document.getElementById('combinedTestBtn')
+            
+            btn.disabled = true
+            resultsDiv.className = 'results info'
+            resultsDiv.textContent = '🔄 Running combined test...\n'
+            
+            try {
+                const projectId = document.getElementById('projectId3').value
+                if (!projectId) {
+                    throw new Error('Project ID is required')
+                }
+                
+                // Step 1: Get total count
+                resultsDiv.textContent += '1️⃣ Getting total project count...\n'
+                const totalResponse = await getPhoneNumberCount(projectId)
+                const totalCount = totalResponse.success ? totalResponse.data.pagination.count : 0
+                resultsDiv.textContent += `   Total: ${totalCount} numbers\n\n`
+                
+                // Step 2: Get mobile count
+                resultsDiv.textContent += '2️⃣ Getting mobile numbers count...\n'
+                const mobileResponse = await getPhoneNumberCount(projectId, { lineType: 'mobile' })
+                const mobileCount = mobileResponse.success ? mobileResponse.data.pagination.count : 0
+                resultsDiv.textContent += `   Mobile: ${mobileCount} numbers\n\n`
+                
+                // Step 3: Export mobile numbers as CSV
+                resultsDiv.textContent += '3️⃣ Exporting mobile numbers as CSV...\n'
+                const { response, result } = await exportPhoneNumbers(projectId, 'csv', { lineType: 'mobile' })
+                
+                if (result.success && result.data && result.data.content) {
+                    const exportedCount = result.data.total_records
+                    const filename = result.data.filename
+                    
+                    resultsDiv.textContent += `   Export completed: ${exportedCount} records\n`
+                    resultsDiv.textContent += `   Filename: ${filename}\n\n`
+                    
+                    // Step 4: Verify everything
+                    resultsDiv.textContent += '4️⃣ Verification:\n'
+                    
+                    let allPassed = true
+                    
+                    // Check count accuracy
+                    if (exportedCount === mobileCount) {
+                        resultsDiv.textContent += '   ✅ Count accuracy: PASS\n'
+                    } else {
+                        resultsDiv.textContent += '   ❌ Count accuracy: FAIL\n'
+                        resultsDiv.textContent += `      Expected: ${mobileCount}, Got: ${exportedCount}\n`
+                        allPassed = false
+                    }
+                    
+                    // Check file format
+                    if (filename.endsWith('.csv') && result.data.format === 'csv') {
+                        resultsDiv.textContent += '   ✅ File format: PASS\n'
+                    } else {
+                        resultsDiv.textContent += '   ❌ File format: FAIL\n'
+                        resultsDiv.textContent += `      Expected: CSV, Got: ${result.data.format}\n`
+                        allPassed = false
+                    }
+                    
+                    // Check content
+                    const lines = result.data.content.split('\n').filter(line => line.trim())
+                    const dataLines = lines.slice(1) // Skip header
+                    if (dataLines.length === exportedCount) {
+                        resultsDiv.textContent += '   ✅ Content integrity: PASS\n'
+                    } else {
+                        resultsDiv.textContent += '   ❌ Content integrity: FAIL\n'
+                        resultsDiv.textContent += `      Expected: ${exportedCount} lines, Got: ${dataLines.length}\n`
+                        allPassed = false
+                    }
+                    
+                    // Final result
+                    if (allPassed) {
+                        resultsDiv.className = 'results success'
+                        resultsDiv.textContent += '\n🎉 COMBINED TEST: ALL PASSED!\n'
+                        resultsDiv.textContent += '✅ Export count is accurate\n'
+                        resultsDiv.textContent += '✅ File format is correct\n'
+                        resultsDiv.textContent += '✅ Content integrity verified\n'
+                        
+                        // Download the file
+                        downloadFile(result.data.content, filename, 'text/csv')
+                        resultsDiv.textContent += `\n📥 Downloaded: ${filename}\n`
+                        
+                    } else {
+                        resultsDiv.className = 'results error'
+                        resultsDiv.textContent += '\n❌ COMBINED TEST: SOME FAILURES\n'
+                        resultsDiv.textContent += 'Please check the individual test results above\n'
+                    }
+                    
+                } else {
+                    resultsDiv.className = 'results error'
+                    resultsDiv.textContent += '❌ Export failed or returned no content\n'
+                }
+                
+            } catch (error) {
+                resultsDiv.className = 'results error'
+                resultsDiv.textContent += `❌ Combined test failed: ${error.message}\n`
+            } finally {
+                btn.disabled = false
+            }
+        }
+
+        // Auto-populate project IDs if they're the same
+        document.addEventListener('DOMContentLoaded', function() {
+            const projectInputs = ['projectId1', 'projectId2', 'projectId3']
+            
+            projectInputs.forEach((id, index) => {
+                document.getElementById(id).addEventListener('input', function(e) {
+                    const value = e.target.value
+                    // Auto-fill other project ID fields
+                    projectInputs.forEach((otherId, otherIndex) => {
+                        if (index !== otherIndex && !document.getElementById(otherId).value) {
+                            document.getElementById(otherId).value = value
+                        }
+                    })
+                })
+            })
+        })
+    </script>
+</body>
+</html>

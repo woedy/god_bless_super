@@ -1,20 +1,39 @@
-# Use the official Node.js image.
-FROM node:16
+# Development Dockerfile with security hardening
+FROM node:18-alpine
 
-# Set the working directory.
-WORKDIR /god_bless_app
+# Install security updates
+RUN apk update && apk upgrade && \
+    apk add --no-cache curl && \
+    rm -rf /var/cache/apk/*
 
-# Copy package.json and package-lock.json (if available).
-COPY package*.json ./
+# Create non-root user
+RUN addgroup -g 1000 -S appgroup && \
+    adduser -u 1000 -S appuser -G appgroup
 
-# Install dependencies.
-RUN npm install
+# Set the working directory
+WORKDIR /app
 
-# Copy the rest of the application files.
-COPY . .
+# Change ownership of the working directory
+RUN chown -R appuser:appgroup /app
 
-# Expose the port the app runs on.
-#EXPOSE 5173
+# Switch to non-root user
+USER appuser
 
-# Command to run the app.
-CMD ["npm", "run", "dev"]
+# Copy package files with proper ownership
+COPY --chown=appuser:appgroup package*.json ./
+
+# Install dependencies
+RUN npm ci --no-audit --no-fund
+
+# Copy the rest of the application files
+COPY --chown=appuser:appgroup . .
+
+# Expose the port the app runs on
+EXPOSE 5173
+
+# Health check for development
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost:5173 || exit 1
+
+# Command to run the app with host binding for Docker
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]

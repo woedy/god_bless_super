@@ -1,19 +1,27 @@
 import { useCallback, useEffect, useState } from 'react';
 import Breadcrumb from '../../components/Breadcrumbs/Breadcrumb';
-import { baseUrl, userID, username, userToken } from '../../constants';
+import { baseUrl, getUserID, getUserToken } from '../../constants';
 import { useNavigate } from 'react-router-dom';
 import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
-import Header from '../../components/Header';
+import { FiBarChart } from 'react-icons/fi';
+import { Project } from '../../types/project';
 
 const AddProject = () => {
   const [projectName, setProjectName] = useState('');
   const [description, setDescription] = useState('');
- 
-  const [projects, setProjects] = useState([]);
+  const [status, setStatus] = useState('planning');
+  const [priority, setPriority] = useState('medium');
+  const [startDate, setStartDate] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [targetPhoneCount, setTargetPhoneCount] = useState('0');
+  const [targetSmsCount, setTargetSmsCount] = useState('0');
+  const [budget, setBudget] = useState('');
+
+  const [projects, setProjects] = useState<Project[]>([]);
 
   // State for delete confirmation modal
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
+  const [itemToDelete, setItemToDelete] = useState<number | null>(null);
 
   const [inputError, setInputError] = useState('');
   const [alert, setAlert] = useState({ message: '', type: '' });
@@ -22,14 +30,13 @@ const AddProject = () => {
   const navigate = useNavigate();
 
   const fetchData = useCallback(async () => {
-    setLoading(true);
     try {
       const response = await fetch(
-        `${baseUrl}api/projects/get-all-projects/?&user_id=${userID}`,
+        `${baseUrl}api/projects/get-all-projects/?&user_id=${getUserID()}`,
         {
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Token ${userToken}`,
+            Authorization: `Token ${getUserToken()}`,
           },
         },
       );
@@ -41,19 +48,18 @@ const AddProject = () => {
       const data = await response.json();
       setProjects(data.data.projects);
 
-      console.log('#######################################');
+      console.log('Projects fetched successfully');
     } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching projects:', error);
+      // Don't throw the error, just log it
     }
-  }, [baseUrl, userToken]);
+  }, []);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const handleSubmitAPI = async (e) => {
+  const handleSubmitAPI = async (e: React.FormEvent) => {
     setLoading(true);
 
     e.preventDefault();
@@ -65,82 +71,98 @@ const AddProject = () => {
       return;
     }
 
-
-
     // Clear any previous error
     setInputError('');
 
     // Create FormData object
     const formData = new FormData();
 
-    formData.append('user_id', userID);
+    formData.append('user_id', getUserID() || '');
     formData.append('project_name', projectName);
     formData.append('description', description);
+    formData.append('status', status);
+    formData.append('priority', priority);
+    if (startDate) formData.append('start_date', startDate);
+    if (dueDate) formData.append('due_date', dueDate);
+    formData.append('target_phone_count', targetPhoneCount);
+    formData.append('target_sms_count', targetSmsCount);
+    if (budget) formData.append('budget', budget);
 
     // Make a POST request to the server
     const url = baseUrl + 'api/projects/add-new-project/';
-    let data; // Declare data outside of the try block
 
     try {
       setLoading(true);
       const response = await fetch(url, {
         method: 'POST',
         headers: {
-          Authorization: `Token ${userToken}`,
+          Authorization: `Token ${getUserToken()}`,
         },
         body: formData,
       });
 
-      // Log formData
-      const formDataObject = {};
-      formData.forEach((value, key) => {
-        formDataObject[key] = value;
-      });
-      console.log('formData:', formDataObject);
+      const data = await response.json();
 
-      data = await response.json(); // Assign data here
-
+      // Check if response is successful (200-299 status codes)
       if (!response.ok) {
         // Handle the server errors correctly
-        console.log('Server error:', data.errors);
-        throw new Error('Errors'); // Custom error message for handling
+        console.log('Server error:', data);
+        if (data.errors) {
+          setInputError(Object.values(data.errors).flat().join('\n'));
+        } else {
+          setInputError(
+            data.message || 'Failed to add project. Please try again.',
+          );
+        }
+        return;
       }
 
-      // Registration successful
-      console.log('Updated Succesfully');
+      // Project added successfully
+      console.log('Project added successfully:', data);
 
-      navigate('/all-projects');
-      setAlert({ message: 'Item deleted successfully', type: 'success' });
+      // Clear form
       setProjectName('');
       setDescription('');
-     
+      setStatus('planning');
+      setPriority('medium');
+      setStartDate('');
+      setDueDate('');
+      setTargetPhoneCount('0');
+      setTargetSmsCount('0');
+      setBudget('');
+
+      // Show success message
+      setAlert({ message: 'Project added successfully', type: 'success' });
+
+      // Refresh project list (don't await to avoid blocking navigation)
+      fetchData();
+
+      // Navigate to all projects
+      navigate('/all-projects');
     } catch (error) {
-      console.error('Error updating data:', error.message);
-      // Check if the error comes from server validation
-      if (error.message === 'Errors' && data && data.errors) {
-        setInputError(Object.values(data.errors).flat().join('\n'));
-      } else {
-        setInputError('Failed to add project.');
-      }
+      console.error('Error adding project:', error);
+      setInputError(
+        'Failed to add project. Please check your connection and try again.',
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const openDeleteModal = (itemId) => {
+  const openDeleteModal = (itemId: number) => {
     setItemToDelete(itemId);
     setIsModalOpen(true);
   };
 
-  const handleDelete = async (itemId) => {
-    const data = { user_id: userID, project_id: itemId };
+  const handleDelete = async (itemId: number) => {
+    const data = { user_id: getUserID(), project_id: itemId };
 
     try {
       const response = await fetch(`${baseUrl}api/projects/delete-project/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Token ${userToken}`,
+          Authorization: `Token ${getUserToken()}`,
         },
         body: JSON.stringify(data),
       });
@@ -171,10 +193,22 @@ const AddProject = () => {
 
   return (
     <>
-      <Header />
-
       <div className="mx-auto max-w-350">
         <Breadcrumb pageName="Add Project" />
+
+        {/* Navigation to Modern Dashboard */}
+        <div className="mb-6 flex justify-between items-center">
+          <h2 className="text-2xl font-bold text-black dark:text-white">
+            Create New Project
+          </h2>
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-2 rounded bg-primary px-4 py-2 text-white hover:bg-opacity-90 transition-all"
+          >
+            <FiBarChart className="w-5 h-5" />
+            Modern Dashboard
+          </button>
+        </div>
 
         <div className="grid grid-cols-2 gap-8">
           <div className="col-span-1 xl:col-span-1">
@@ -220,17 +254,151 @@ const AddProject = () => {
                     >
                       Description
                     </label>
-                    <input
+                    <textarea
                       className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
-                      type="text"
                       name="desc"
-                      id="desc"
+                      id="description"
                       placeholder=""
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
+                      rows={3}
                     />
                   </div>
 
+                  <div className="mb-5.5 grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        className="mb-3 block text-sm font-medium text-black dark:text-white"
+                        htmlFor="status"
+                      >
+                        Status
+                      </label>
+                      <select
+                        className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                        name="status"
+                        id="status"
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                      >
+                        <option value="planning">Planning</option>
+                        <option value="active">Active</option>
+                        <option value="on_hold">On Hold</option>
+                        <option value="completed">Completed</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label
+                        className="mb-3 block text-sm font-medium text-black dark:text-white"
+                        htmlFor="priority"
+                      >
+                        Priority
+                      </label>
+                      <select
+                        className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                        name="priority"
+                        id="priority"
+                        value={priority}
+                        onChange={(e) => setPriority(e.target.value)}
+                      >
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                        <option value="urgent">Urgent</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mb-5.5 grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        className="mb-3 block text-sm font-medium text-black dark:text-white"
+                        htmlFor="startDate"
+                      >
+                        Start Date
+                      </label>
+                      <input
+                        className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                        type="date"
+                        name="startDate"
+                        id="startDate"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        className="mb-3 block text-sm font-medium text-black dark:text-white"
+                        htmlFor="dueDate"
+                      >
+                        Due Date
+                      </label>
+                      <input
+                        className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                        type="date"
+                        name="dueDate"
+                        id="dueDate"
+                        value={dueDate}
+                        onChange={(e) => setDueDate(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-5.5 grid grid-cols-2 gap-4">
+                    <div>
+                      <label
+                        className="mb-3 block text-sm font-medium text-black dark:text-white"
+                        htmlFor="targetPhoneCount"
+                      >
+                        Target Phone Count
+                      </label>
+                      <input
+                        className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                        type="number"
+                        name="targetPhoneCount"
+                        id="targetPhoneCount"
+                        value={targetPhoneCount}
+                        onChange={(e) => setTargetPhoneCount(e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label
+                        className="mb-3 block text-sm font-medium text-black dark:text-white"
+                        htmlFor="targetSmsCount"
+                      >
+                        Target SMS Count
+                      </label>
+                      <input
+                        className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                        type="number"
+                        name="targetSmsCount"
+                        id="targetSmsCount"
+                        value={targetSmsCount}
+                        onChange={(e) => setTargetSmsCount(e.target.value)}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mb-5.5">
+                    <label
+                      className="mb-3 block text-sm font-medium text-black dark:text-white"
+                      htmlFor="budget"
+                    >
+                      Budget (Optional)
+                    </label>
+                    <input
+                      className="w-full rounded border border-stroke bg-gray py-3 px-4.5 text-black focus:border-primary focus-visible:outline-none dark:border-strokedark dark:bg-meta-4 dark:text-white dark:focus:border-primary"
+                      type="number"
+                      step="0.01"
+                      name="budget"
+                      id="budget"
+                      placeholder="0.00"
+                      value={budget}
+                      onChange={(e) => setBudget(e.target.value)}
+                    />
+                  </div>
 
                   <div className="flex justify-end gap-4.5">
                     <button className="flex justify-center rounded border border-stroke py-2 px-6 font-medium text-black hover:shadow-1 dark:border-strokedark dark:text-white">
@@ -269,8 +437,6 @@ const AddProject = () => {
                 <div className="col-span-1 flex items-center">
                   <p className="font-medium">Description</p>
                 </div>
-
-              
               </div>
 
               {projects
@@ -293,7 +459,6 @@ const AddProject = () => {
                           </p>
                         </div>
                       </div>
-                  
 
                       <button
                         className="hover:text-primary"

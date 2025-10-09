@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import Breadcrumb from '../../components/Breadcrumbs/Breadcrumb';
 import { baseUrl, userID, username, userToken } from '../../constants';
 import { useNavigate } from 'react-router-dom';
-import DeleteConfirmationModal from '../../components/DeleteConfirmationModal';
+import toast from 'react-hot-toast';
 
 const SmsSender = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
@@ -15,13 +15,7 @@ const SmsSender = () => {
   const [carriers, setCarriers] = useState([]);
   const [smtps, setSMTPs] = useState([]);
 
-  // State for delete confirmation modal
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [itemToDelete, setItemToDelete] = useState(null);
-
   const [inputError, setInputError] = useState('');
-  const [alert, setAlert] = useState({ message: '', type: '' });
-
   const [isLoading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -140,11 +134,10 @@ const SmsSender = () => {
         throw new Error('Errors'); // Custom error message for handling
       }
 
-      // Registration successful
-      console.log('Updated Succesfully');
-
-      await fetchData();
-      setAlert({ message: 'Item added successfully', type: 'success' });
+      // SMS sent successfully
+      console.log('SMS sent successfully');
+      toast.success('SMS sent successfully!');
+      
       setPhoneNumber('');
       setSenderName('');
       setSubject('');
@@ -164,52 +157,21 @@ const SmsSender = () => {
     }
   };
 
-  const openDeleteModal = (itemId) => {
-    setItemToDelete(itemId);
-    setIsModalOpen(true);
-  };
 
-  const handleDelete = async (itemId) => {
-    const data = { user_id: userID, id: itemId };
-
-    try {
-      const response = await fetch(`${baseUrl}api/smtp-manager/delete-smtp/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Token ${userToken}`,
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete the item');
-      }
-
-      // Refresh the data after deletion
-      await fetchData();
-      setAlert({ message: 'Item deleted successfully', type: 'success' });
-    } catch (error) {
-      console.error('Error deleting item:', error);
-      setAlert({
-        message: 'An error occurred while deleting the item',
-        type: 'error',
-      });
-    } finally {
-      setIsModalOpen(false);
-      setItemToDelete(null);
-    }
-  };
-
-  const closeDeleteModal = () => {
-    setIsModalOpen(false);
-    setItemToDelete(null);
-  };
 
   return (
     <>
       <div className="mx-auto max-w-350">
         <Breadcrumb pageName="SMS Sender" />
+
+        <div className="mb-6 flex justify-end">
+          <button
+            onClick={() => navigate('/sms-sender/bulk')}
+            className="rounded bg-primary px-6 py-3 text-white hover:bg-opacity-90"
+          >
+            Send Bulk SMS
+          </button>
+        </div>
 
         <div className="grid grid-cols-2 gap-8">
           <div className="col-span-2 xl:col-span-2">
@@ -471,12 +433,6 @@ const SmsSender = () => {
           </div>
         </div>
 
-        <DeleteConfirmationModal
-          isOpen={isModalOpen}
-          itemId={itemToDelete}
-          onConfirm={handleDelete}
-          onCancel={closeDeleteModal}
-        />
       </div>
     </>
   );

@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from accounts.api.serializers import UserRegistrationSerializer, PasswordResetSerializer, ListAllUsersSerializer
 from accounts.api.tasks import deactivate_expired_subscriptions, send_notification_to_admin
-from accounts.models import UserAPIKey, UserSubscription
+from accounts.models import UserSubscription
 from activities.models import AllActivity
 from god_bless_pro.utils import generate_email_token, generate_random_otp_code
 User = get_user_model()
@@ -1122,69 +1122,8 @@ def delete_user_view(request):
 
 
 
-@api_view(['POST'])
-@permission_classes([IsAuthenticated])
-@authentication_classes([TokenAuthentication])
-def add_or_update_user_api_key(request):
-    payload = {}
-    errors = {}
-
-    # Get data from the request
-    user_id = request.data.get('user_id', "")
-    abstract_api_key = request.data.get('abstract_api_key', "")
-    quality_api_key = request.data.get('quality_api_key', "")
-
-    # Validate input data
-    if not user_id:
-        errors['user_id'] = ['User ID is required.']
-    
-    if not abstract_api_key:
-        errors['abstract_api_key'] = ['Abstract API key is required.']
-    
-    if not quality_api_key:
-        errors['quality_api_key'] = ['Quality API key is required.']
-
-    # Return error response if validation fails
-    if errors:
-        payload['message'] = "Errors"
-        payload['errors'] = errors
-        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-
-    try:
-        user = User.objects.get(user_id=user_id)
-    except User.DoesNotExist:
-        errors['user_id'] = ['User does not exist.']
-        payload['message'] = "Errors"
-        payload['errors'] = errors
-        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-
-    # Check if UserAPIKey already exists for this user
-    try:
-        user_api_key = UserAPIKey.objects.get(user=user)
-        # Update existing API keys
-        user_api_key.abstract_api_key = abstract_api_key
-        user_api_key.quality_api_key = quality_api_key
-        user_api_key.save()
-
-        payload['message'] = "User API keys updated successfully"
-        payload['data'] = {
-            "abstract_api_key": user_api_key.abstract_api_key,
-            "quality_api_key": user_api_key.quality_api_key
-        }
-        return Response(payload, status=status.HTTP_200_OK)
-
-    except UserAPIKey.DoesNotExist:
-        # Create new UserAPIKey
-        user_api_key = UserAPIKey(user=user, abstract_api_key=abstract_api_key, quality_api_key=quality_api_key)
-        user_api_key.save()
-
-        payload['message'] = "User API keys added successfully"
-        payload['data'] = {
-            "abstract_api_key": user_api_key.abstract_api_key,
-            "quality_api_key": user_api_key.quality_api_key
-        }
-        return Response(payload, status=status.HTTP_201_CREATED)
-    
+# Legacy external API key management functions removed
+# External API validation (Abstract API and IPQuality) is no longer used
 
 
 @api_view(['GET'])
@@ -1209,16 +1148,8 @@ def settings_view(request):
         payload['message'] = "Errors"
         payload['errors'] = errors
         return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-                
-    try:
-        user_api = UserAPIKey.objects.get(user=user)
-        data['asbract_api'] = user_api.abstract_api_key
-        data['ipquality_api'] = user_api.quality_api_key
-    except UserAPIKey.DoesNotExist:
-        # If no API key is found, set empty values
-        data['asbract_api'] = ""
-        data['ipquality_api'] = ""
 
+    # External API keys removed - settings now only contain user preferences
     payload['message'] = "Successful"
     payload['data'] = data
 

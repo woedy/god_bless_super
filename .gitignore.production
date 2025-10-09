@@ -1,0 +1,38 @@
+# Production-specific files to add to .gitignore
+
+# Environment files
+.env
+.env.production
+.env.local
+
+# SSL Certificates
+certbot/
+*.pem
+*.key
+*.crt
+
+# Backups
+backups/
+*.sql
+*.dump
+
+# Logs
+logs/
+*.log
+
+# Monitoring data
+monitoring/grafana/data/
+prometheus_data/
+grafana_data/
+loki_data/
+
+# Database data
+postgres_data/
+redis_data/
+
+# Docker volumes
+data/
+
+# Secrets
+secrets/
+*.secret

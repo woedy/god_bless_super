@@ -1,16 +1,14 @@
 from django.urls import path
 
-from accounts.api.views import add_or_update_user_api_key, register_user, settings_view, subscribe_user, trigger_task_sequence, verify_user_email, resend_email_verification, UserLogin, \
+from accounts.api.views import register_user, subscribe_user, trigger_task_sequence, verify_user_email, resend_email_verification, UserLogin, \
     PasswordResetView, confirm_otp_password_view, resend_password_otp, new_password_reset_view, \
     edit_profile, list_all_users_view, get_user_details_view, archive_user_view, unarchive_user_view, \
     list_all_archived_users_view, delete_user_view
+from accounts.api.settings_views import user_preferences_view, system_settings_view, get_all_settings_view
 
 app_name = 'accounts'
 
 urlpatterns = [
-    #path('register-user/', register_user, name="register_user"),
-
-
     path('register-user/', register_user, name="register_user"),
     path('edit-profile/', edit_profile, name="edit_profile"),
 
@@ -23,7 +21,6 @@ urlpatterns = [
     path('resend-password-otp/', resend_password_otp, name="resend_password_otp"),
     path('new-password-reset/', new_password_reset_view, name="new_password_reset_view"),
 
-
     path('get-all-users/', list_all_users_view, name="list_all_users_view"),
     path('get-all-archived-users/', list_all_archived_users_view, name="list_all_archived_users_view"),
     path('get-user-details/', get_user_details_view, name="get_user_details_view"),
@@ -31,14 +28,11 @@ urlpatterns = [
     path('unarchive-user/', unarchive_user_view, name="unarchive_user_view"),
     path('delete-user/', delete_user_view, name="delete_user_view"),
     
-    path('add-user-api/', add_or_update_user_api_key, name="add_or_update_user_api_key"),
-    
-    path('settings/', settings_view, name="settings_view"),
-    
-    
+    # Enhanced settings endpoints
+    path('user-preferences/', user_preferences_view, name="user_preferences_view"),
+    path('system-settings/', system_settings_view, name="system_settings_view"),
+    path('all-settings/', get_all_settings_view, name="get_all_settings_view"),
     
     path('subscribe-user/', subscribe_user, name='subscribe_user'),
     path('trigger-task-sequence/', trigger_task_sequence, name='trigger_task_sequence'),
-
-
 ]

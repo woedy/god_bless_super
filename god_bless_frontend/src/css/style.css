@@ -3,8 +3,69 @@
 @tailwind utilities;
 
 @layer base {
+  /* CSS Variables for Theme System */
+  :root {
+    /* Light theme colors */
+    --color-background: 241 245 249; /* whiten */
+    --color-foreground: 28 36 52; /* black */
+    --color-card: 255 255 255; /* white */
+    --color-card-foreground: 28 36 52; /* black */
+    --color-popover: 255 255 255; /* white */
+    --color-popover-foreground: 28 36 52; /* black */
+    --color-muted: 239 244 251; /* gray */
+    --color-muted-foreground: 100 116 139; /* body */
+    --color-accent: 239 244 251; /* gray */
+    --color-accent-foreground: 28 36 52; /* black */
+    --color-destructive: 211 64 83; /* danger */
+    --color-destructive-foreground: 255 255 255; /* white */
+    --color-border: 226 232 240; /* stroke */
+    --color-input: 226 232 240; /* stroke */
+    --color-ring: 0 48 143; /* primary */
+  }
+
+  .dark {
+    /* Dark theme colors */
+    --color-background: 26 34 44; /* boxdark-2 */
+    --color-foreground: 222 228 238; /* bodydark1 */
+    --color-card: 36 48 63; /* boxdark */
+    --color-card-foreground: 222 228 238; /* bodydark1 */
+    --color-popover: 36 48 63; /* boxdark */
+    --color-popover-foreground: 222 228 238; /* bodydark1 */
+    --color-muted: 49 61 74; /* meta-4 */
+    --color-muted-foreground: 174 183 192; /* bodydark */
+    --color-accent: 49 61 74; /* meta-4 */
+    --color-accent-foreground: 222 228 238; /* bodydark1 */
+    --color-destructive: 211 64 83; /* danger */
+    --color-destructive-foreground: 255 255 255; /* white */
+    --color-border: 46 58 71; /* strokedark */
+    --color-input: 61 77 96; /* form-strokedark */
+    --color-ring: 128 202 238; /* secondary */
+  }
+
+  * {
+    @apply border-border;
+  }
+
   body {
-    @apply font-satoshi font-normal text-base text-body bg-whiten relative z-1;
+    @apply font-satoshi font-normal text-base text-body bg-whiten relative z-1 transition-colors duration-300;
+  }
+
+  body.dark {
+    @apply bg-boxdark-2 text-bodydark;
+  }
+
+  /* Smooth transitions for theme changes */
+  body,
+  body * {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-duration: 300ms;
+    transition-timing-function: ease-in-out;
+  }
+
+  /* Prevent transition on page load */
+  body.no-transition,
+  body.no-transition * {
+    transition: none !important;
   }
 }
 
@@ -27,6 +88,27 @@
   }
   .inbox-height {
     @apply h-[calc(100vh_-_8.125rem)] lg:h-[calc(100vh_-_5.625rem)];
+  }
+
+  /* Landing Page Animations */
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .animate-fade-in {
+    animation: fade-in 1s ease-out;
+  }
+
+  /* Smooth scroll behavior */
+  html {
+    scroll-behavior: smooth;
   }
 }
 
