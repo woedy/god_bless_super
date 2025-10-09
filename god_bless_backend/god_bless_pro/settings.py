@@ -14,7 +14,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Security Configuration
 SECRET_KEY = os.environ.get('SECRET_KEY', "django-insecure-d=@lt+9e06usk(qpw$@fy6%5449i*8j81)z%u^^1j-5@jys1st")
 DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', '*').split(',')
+# ALLOWED_HOSTS configuration
+allowed_hosts_env = os.environ.get('ALLOWED_HOSTS', '*')
+if allowed_hosts_env == '*':
+    ALLOWED_HOSTS = ['*']
+else:
+    # Always include localhost and common internal IPs for health checks
+    ALLOWED_HOSTS = allowed_hosts_env.split(',') + ['localhost', '127.0.0.1', '0.0.0.0']
 
 # Email Configuration
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
