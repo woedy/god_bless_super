@@ -46,6 +46,39 @@ else:
 EOF
 fi
 
+# Debug: Show directory structure
+echo "=== Directory Structure Debug ==="
+echo "App directory contents:"
+ls -la /app/
+echo ""
+echo "Frontend build contents:"
+ls -la /app/frontend_build/ || echo "Frontend build directory not found"
+echo ""
+echo "Static files contents:"
+ls -la /app/static_cdn/ || echo "Static cdn directory not found"
+ls -la /app/static_cdn/static_root/ || echo "Static root directory not found"
+echo "=== End Debug ==="
+
+# Check frontend build exists
+if [ ! -d "/app/frontend_build" ] || [ ! -f "/app/frontend_build/index.html" ]; then
+    echo "ERROR: Frontend build not found at /app/frontend_build/"
+    echo "Available files in /app/:"
+    ls -la /app/
+    exit 1
+fi
+
+# Check static files
+if [ ! -d "/app/static_cdn/static_root" ]; then
+    echo "ERROR: Static files not found at /app/static_cdn/static_root/"
+    echo "Available files in /app/static_cdn/:"
+    ls -la /app/static_cdn/
+    exit 1
+fi
+
+# Test Nginx configuration
+echo "Testing Nginx configuration..."
+nginx -t
+
 # Start Nginx
 echo "Starting Nginx..."
 nginx

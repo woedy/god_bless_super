@@ -47,9 +47,10 @@ COPY god_bless_backend/ ./
 # Copy built frontend
 COPY --from=frontend-builder /frontend/dist ./frontend_build/
 
-# Create directories
-RUN mkdir -p /app/static_cdn /app/media /app/logs \
-    && chown -R appuser:appuser /app
+# Create directories and set permissions
+RUN mkdir -p /app/static_cdn/static_root /app/static_cdn/static_files /app/media /app/logs \
+    && chown -R appuser:appuser /app \
+    && chmod -R 755 /app/frontend_build
 
 # Copy nginx configuration
 COPY nginx.prod.conf /etc/nginx/sites-available/default
@@ -59,7 +60,10 @@ COPY start-prod.sh /start-prod.sh
 RUN chmod +x /start-prod.sh
 
 # Collect static files
-RUN python manage.py collectstatic --noinput --settings=god_bless_pro.settings
+RUN python manage.py collectstatic --noinput --clear --settings=god_bless_pro.settings
+
+# Verify static files were collected
+RUN ls -la /app/static_cdn/static_root/ || echo "Static files directory empty"
 
 # Set ownership
 RUN chown -R appuser:appuser /app
