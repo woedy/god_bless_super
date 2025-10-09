@@ -12,6 +12,28 @@ from django.utils import timezone
 logger = logging.getLogger(__name__)
 
 
+@api_view(['GET'])
+@permission_classes([AllowAny])
+def api_root(request):
+    """
+    API root endpoint showing available endpoints.
+    """
+    return Response({
+        'message': 'God Bless Platform API',
+        'version': '1.0.0',
+        'endpoints': {
+            'health': '/api/health/',
+            'accounts': '/api/accounts/',
+            'phone-generator': '/api/phone-generator/',
+            'phone-validator': '/api/phone-validator/',
+            'sms-sender': '/api/sms-sender/',
+            'dashboard': '/api/dashboard/',
+            'projects': '/api/projects/',
+            'tasks': '/api/tasks/',
+        }
+    })
+
+
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def log_frontend_error(request):
