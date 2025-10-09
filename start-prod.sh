@@ -23,6 +23,10 @@ echo "Redis is ready!"
 echo "Running database migrations..."
 python manage.py migrate --noinput
 
+# Run django-celery-beat migrations specifically
+echo "Running django-celery-beat migrations..."
+python manage.py migrate django_celery_beat --noinput
+
 # Create superuser if specified
 if [ "$CREATE_SUPERUSER" = "true" ]; then
     echo "Creating superuser..."
