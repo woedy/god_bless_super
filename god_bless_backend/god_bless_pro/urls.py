@@ -26,6 +26,9 @@ from god_bless_pro import monitoring_views
 urlpatterns = [
     path('admin/', admin.site.urls),
     
+    # API root
+    path('api/', views.api_root, name='api_root'),
+    
     # Health check endpoints
     path('api/health/', health_checks.health_check, name='health_check'),
     path('api/health/ready/', health_checks.readiness_check, name='readiness_check'),
