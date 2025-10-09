@@ -1,130 +1,76 @@
 # Project Structure
 
-## Root Directory Organization
-
+## Root Level Organization
 ```
-├── god_bless_backend/     # Django backend application
-├── god_bless_frontend/    # React frontend application
-├── nginx/                 # Nginx configuration files
-├── monitoring/            # Prometheus, Grafana, Loki configs
-├── docs/                  # Project documentation
-├── docker-compose.*.yml   # Docker orchestration files
-└── *.md                   # Various fix summaries and guides
+├── god_bless_backend/     # Django REST API backend
+├── god_bless_platform/    # React TypeScript frontend  
+├── docs/                  # Documentation and deployment guides
+├── scripts/               # Deployment and utility scripts
+├── tests/                 # Cross-project integration tests
+└── package.json           # Root workspace dependencies (WebSocket)
 ```
 
 ## Backend Structure (god_bless_backend/)
+```
+├── god_bless_pro/         # Main Django project settings
+├── accounts/              # User authentication and management
+├── activities/            # Activity logging and tracking
+├── banks/                 # Banking/payment integrations
+├── phone_generator/       # Phone number generation logic
+├── phone_number_validator/ # Phone validation services
+├── sms_sender/            # SMS campaign management
+├── validator/             # General validation utilities
+├── projects/              # Project management system
+├── tasks/                 # Background task definitions
+├── dashboard/             # Analytics and reporting
+├── shortener/             # URL shortening service
+├── proxy_server/          # Proxy management
+├── templates/             # Django HTML templates
+├── static_cdn/            # Static file serving
+├── media/                 # User uploaded files
+├── logs/                  # Application logs
+└── scripts/               # Database and utility scripts
+```
 
-### Django Apps
-- `accounts/` - User management and authentication
-- `activities/` - Activity logging and tracking
-- `phone_generator/` - Phone number generation logic
-- `phone_number_validator/` - Phone validation services
-- `sms_sender/` - SMS sending functionality
-- `projects/` - Project management
-- `tasks/` - Background task definitions
-- `proxy_server/` - Proxy server functionality
-- `smtps/` - SMTP configuration management
-- `shortener/` - URL shortening services
+## Frontend Structure (god_bless_platform/src/)
+```
+├── components/            # Reusable UI components
+│   ├── common/           # Generic components (buttons, modals)
+│   ├── forms/            # Form-specific components
+│   ├── charts/           # Data visualization components
+│   └── layout/           # Layout and navigation
+├── pages/                # Route-level page components
+│   ├── auth/             # Login, register, password reset
+│   ├── dashboard/        # Main dashboard and analytics
+│   ├── projects/         # Project management pages
+│   ├── phone-numbers/    # Phone generation and validation
+│   └── sms/              # SMS campaign management
+├── hooks/                # Custom React hooks
+├── services/             # API client and WebSocket services
+├── utils/                # Utility functions and helpers
+├── types/                # TypeScript type definitions
+├── contexts/             # React context providers
+├── config/               # Configuration and routing
+└── styles/               # Global CSS and Tailwind config
+```
 
-### Core Configuration
-- `god_bless_pro/` - Main Django project settings
-  - `settings.py` - Django configuration
-  - `urls.py` - URL routing
-  - `asgi.py` - ASGI configuration for WebSockets
-  - `celery.py` - Celery task queue configuration
-  - `middleware.py` - Custom middleware
-  - `security_middleware.py` - Security-related middleware
+## Configuration Files
+- **Environment**: `.env.example`, `.env.local`, `.env.production` per service
+- **Docker**: `Dockerfile`, `docker-compose.yml` in each service
+- **Database**: Multiple `.env.*` files for different database backends
+- **Scripts**: Batch files (`.bat`) for Windows, shell scripts (`.sh`) for Unix
 
-### Key Directories
-- `templates/` - Django HTML templates
-- `static_cdn/` - Static files for production
-- `media/` - User uploaded files
-- `logs/` - Application logs
-- `tests/` - Test files
-- `data/` - Data files and fixtures
-
-## Frontend Structure (god_bless_frontend/)
-
-### Source Organization (`src/`)
-- `pages/` - React page components
-  - `Dashboard/` - Dashboard-related components
-  - `Projects/` - Project management pages
-  - `Authentication/` - Login/signup pages
-- `components/` - Reusable UI components
-- `hooks/` - Custom React hooks
-- `utils/` - Utility functions
-- `types/` - TypeScript type definitions
-- `tests/` - Test files
-
-### Configuration Files
-- `vite.config.js` - Vite build configuration
-- `tailwind.config.cjs` - Tailwind CSS configuration
-- `tsconfig.json` - TypeScript configuration
-- `vitest.config.js` - Test configuration
-- `package.json` - Dependencies and scripts
-
-### Build Output
-- `dist/` - Production build output
-- `node_modules/` - NPM dependencies
+## Key Conventions
+- **Database Switching**: Use provided scripts (`switch_to_sqlite.bat`, `switch_to_postgres.bat`)
+- **Environment Management**: Service-specific `.env` files with examples provided
+- **Testing**: Separate test directories with dedicated configuration
+- **Logging**: Centralized in `logs/` directory with structured formats
+- **Static Files**: Served from `static_cdn/` with proper CDN configuration
+- **Media Files**: User uploads in `media/` with proper permissions
 
 ## Documentation Structure (docs/)
-
-- `API_DOCUMENTATION.md` - API reference
-- `USER_GUIDE.md` - End-user documentation
-- `deploy/` - Deployment guides
-- `testing/` - Testing documentation
-- `tasks/` - Task-specific documentation
-- `refs/` - Reference materials
-
-## Infrastructure Files
-
-### Docker Configuration
-- `docker-compose.yml` - Local development
-- `docker-compose.prod.yml` - Production deployment
-- `docker-compose.monitoring.yml` - Monitoring stack
-- `Dockerfile` - Backend container definition
-- `Dockerfile.prod` - Production backend container
-
-### Nginx Configuration
-- `nginx/nginx.conf` - Main Nginx configuration
-- `nginx/conf.d/` - Site-specific configurations
-
-### Monitoring
-- `monitoring/prometheus.yml` - Metrics collection
-- `monitoring/loki-config.yml` - Log aggregation
-- `monitoring/promtail-config.yml` - Log shipping
-
-## Naming Conventions
-
-### Backend (Python/Django)
-- Use `snake_case` for variables, functions, and file names
-- Use `PascalCase` for class names
-- Use `UPPER_CASE` for constants
-- Django apps use lowercase with underscores
-
-### Frontend (React/TypeScript)
-- Use `PascalCase` for component names and files
-- Use `camelCase` for variables and functions
-- Use `kebab-case` for CSS classes (Tailwind)
-- Use `UPPER_CASE` for constants
-
-### File Organization
-- Group related functionality in dedicated directories
-- Keep test files adjacent to source files when possible
-- Use descriptive names that indicate purpose
-- Separate concerns between pages, components, and utilities
-
-## Key Patterns
-
-### Backend Patterns
-- Each Django app follows standard structure: `models.py`, `views.py`, `serializers.py`, `urls.py`
-- Use Django REST Framework viewsets for API endpoints
-- Implement custom middleware for cross-cutting concerns
-- Use Celery tasks for background processing
-
-### Frontend Patterns
-- Page components in `pages/` directory
-- Reusable components in `components/` directory
-- Custom hooks for shared logic
-- TypeScript interfaces in `types/` directory
-- Utility functions separated by concern
+- **API**: Complete API documentation
+- **Deployment**: Coolify-specific deployment guides
+- **Environment**: Configuration setup guides
+- **Troubleshooting**: Common issues and solutions
+- **SSL/Domain**: NGINX and SSL configuration guides

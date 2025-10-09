@@ -1,140 +1,101 @@
-# Unified Docker Deployment Guide
+# Coolify Deployment Guide
 
-This guide shows how to use the unified Docker configuration for both local development and Coolify production deployment.
+## Simple Single-Domain Setup
 
-## 🏠 Local Development
+This setup serves everything from one domain:
+- `https://yourdomain.com/` → Frontend (React)
+- `https://yourdomain.com/api/` → Backend API  
+- `https://yourdomain.com/ws/` → WebSocket
+- `https://yourdomain.com/admin/` → Django Admin
 
-### Quick Start
-```bash
-# Use the provided scripts
-.\start.ps1    # PowerShell
-# or
-start.bat      # Batch
-# or  
-./start.sh     # Bash (Linux/Mac)
-```
+## Quick Deployment Steps
 
-### Manual Start
-```bash
-cd god_bless_backend
-docker-compose --env-file .env.local --profile development up -d
-```
+### 1. Deploy to Coolify
+1. Connect your repository to Coolify
+2. Select **Docker Compose** as deployment type
+3. Set compose file path to: `docker-compose.prod.yml`
 
-## ☁️ Coolify Production Deployment
-
-### 1. Repository Setup
-- Push your code to GitHub/GitLab
-- Ensure `god_bless_backend/docker-compose.yml` is in your repo
-
-### 2. Coolify Project Setup
-1. Create new project in Coolify
-2. Add a new **Docker Compose** service
-3. Set repository URL to your Git repo
-4. Set **Build Pack** to `docker-compose`
-5. Set **Docker Compose File** path to: `god_bless_backend/docker-compose.yml`
-
-### 3. Environment Variables
-Add these environment variables in Coolify:
+### 2. Set Environment Variables
+Copy these variables to Coolify environment settings:
 
 ```bash
-# Required - Change these values!
-SECRET_KEY=your-super-secret-key-here-minimum-50-characters-long
-POSTGRES_PASSWORD=your-secure-postgres-password-123
-REDIS_PASSWORD=your-secure-redis-password-123
+# Required
+DOMAIN=yourdomain.com
+SECRET_KEY=your-super-secret-key-here-minimum-50-characters
+POSTGRES_PASSWORD=your-secure-postgres-password  
+REDIS_PASSWORD=your-secure-redis-password
 
-# Optional - Customize as needed
-DEBUG=False
-POSTGRES_DB=god_bless_postgres
-POSTGRES_USER=god_bless_postgres
+# Database
+POSTGRES_DB=god_bless_db
+POSTGRES_USER=god_bless_user
+
+# Optional: Email
 EMAIL_HOST=smtp.gmail.com
 EMAIL_HOST_USER=your-email@gmail.com
-EMAIL_HOST_PASSWORD=your-app-password
-ALLOWED_HOSTS=your-domain.com,*.your-domain.com
-CORS_ALLOWED_ORIGINS=https://your-domain.com
+EMAIL_HOST_PASSWORD=your-email-password
 ```
 
-### 4. Domain Setup
-1. Set your custom domain in Coolify
-2. Enable SSL/TLS certificate
-3. Update `ALLOWED_HOSTS` and `CORS_ALLOWED_ORIGINS` with your domain
+### 3. Configure Domain
+1. Set your domain in Coolify dashboard
+2. Enable SSL (automatic with Coolify)
+3. Deploy!
 
-### 5. Deploy
-1. Click **Deploy** in Coolify
-2. Monitor deployment logs
-3. Access your application at your domain
+## Database Rotation Handling
 
-## 🔧 Local vs Production
+Your current setup supports database switching via environment variables:
 
-### Local Development
+### Option 1: Keep Current Database
+- Set `USE_POSTGRES=true` in production
+- Your existing data stays in PostgreSQL
+- Coolify handles backups automatically
+
+### Option 2: Migrate from SQLite to PostgreSQL
+If you're currently using SQLite and want to migrate:
+
 ```bash
-# With frontend (development profile)
-docker-compose --env-file .env.local --profile development up -d
+# 1. Export SQLite data
+python manage.py dumpdata > backup.json
 
-# Backend only (production-like)
-docker-compose --env-file .env.local up -d
+# 2. Deploy with PostgreSQL
+# 3. Load data into PostgreSQL
+python manage.py loaddata backup.json
 ```
 
-### Production (Coolify)
+### Option 3: Database Rotation Strategy
+For automatic database rotation/backup:
+
+1. **Coolify Backups**: Enable automatic PostgreSQL backups in Coolify
+2. **Manual Rotation**: Use Django management commands
+3. **External Backup**: Set up external backup service
+
+## Frontend Configuration
+
+The frontend automatically uses the correct endpoints:
+- API: `https://yourdomain.com/api/`
+- WebSocket: `wss://yourdomain.com/ws/`
+
+No code changes needed - environment variables handle everything!
+
+## Troubleshooting
+
+### Check Logs
 ```bash
-# Coolify automatically uses environment variables
-# No .env file needed - uses Coolify's environment settings
-docker-compose up -d
+# Application logs
+docker logs <container_name>
+
+# Database logs  
+docker logs <database_container>
 ```
 
-## 📊 Service Mapping
+### Health Check
+Visit: `https://yourdomain.com/api/health/`
 
-| Service | Local Port | Coolify | Description |
-|---------|------------|---------|-------------|
-| Backend | 6161 | Auto-assigned | Django API |
-| Database | Internal | Internal | PostgreSQL |
-| Redis | Internal | Internal | Cache/Queue |
-| Celery | Internal | Internal | Background tasks |
+### Admin Access
+Visit: `https://yourdomain.com/admin/`
 
-## 🛠️ Troubleshooting
+## Security Notes
 
-### Common Issues
-
-**1. Build Fails**
-- Check Dockerfile exists in `god_bless_backend/`
-- Verify requirements.txt is present
-- Check build logs in Coolify
-
-**2. Database Connection Issues**
-- Verify POSTGRES_* environment variables
-- Check if migrations ran successfully
-- Look for database connection errors in logs
-
-**3. Static Files Not Loading**
-- Ensure `collectstatic` runs in entrypoint
-- Check volume mounts for static files
-- Verify ALLOWED_HOSTS includes your domain
-
-**4. Celery Not Working**
-- Check Redis connection
-- Verify CELERY_BROKER_URL format
-- Monitor celery service logs
-
-### Viewing Logs
-```bash
-# In Coolify dashboard
-1. Go to your service
-2. Click "Logs" tab
-3. Select specific container (backend, celery, etc.)
-```
-
-## 🔐 Security Checklist
-
-- [ ] Change SECRET_KEY to a strong, unique value
-- [ ] Set DEBUG=False in production
-- [ ] Use strong database passwords
-- [ ] Configure proper ALLOWED_HOSTS
-- [ ] Set up CORS_ALLOWED_ORIGINS correctly
-- [ ] Enable SSL/TLS certificate
-- [ ] Review email settings for production use
-
-## 📝 Notes
-
-- Coolify handles container orchestration automatically
-- No need to expose ports manually (Coolify manages this)
-- Database and Redis data persist between deployments
-- Static files are collected automatically on each deployment
+- All passwords are environment variables
+- HTTPS enforced in production
+- CORS properly configured
+- Static files cached with proper headers
