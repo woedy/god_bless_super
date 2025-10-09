@@ -1,14 +1,25 @@
-# Use pre-built frontend (skip Docker build for now)
-FROM alpine:latest as frontend-builder
+# Simple frontend build
+FROM node:18-alpine as frontend-builder
 
-# Create a dummy dist directory with the local build
 WORKDIR /frontend
-COPY god_bless_platform/dist ./dist/
 
-# Verify the copied files
-RUN echo "=== Frontend Copy Debug ===" && \
-    ls -la /frontend/dist/ && \
-    echo "=== End Frontend Copy Debug ==="
+# Copy package files
+COPY god_bless_platform/package*.json ./
+RUN npm ci --only=production
+
+# Copy source code
+COPY god_bless_platform/ ./
+
+# Set environment variables for production
+ENV NODE_ENV=production
+ENV VITE_API_URL=/api
+ENV VITE_WS_URL=/ws
+
+# Build with simple vite command (skip TypeScript checking)
+RUN npx vite build --mode production
+
+# Verify build output
+RUN ls -la dist/ && test -f dist/index.html
 
 # Backend + Frontend production image
 FROM python:3.11-slim
