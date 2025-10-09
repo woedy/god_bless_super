@@ -1,23 +1,22 @@
 # Product Overview
 
-God Bless America is a comprehensive phone number management and validation platform with SMS capabilities. The system provides:
+God Bless Platform is a comprehensive phone number management and SMS campaign system consisting of two main components:
 
-- **Phone Number Generation**: Automated generation of phone numbers with validation
-- **SMS Services**: Bulk SMS sending and management capabilities  
-- **Phone Number Validation**: Real-time validation of phone numbers
-- **Project Management**: Organization of phone numbers and SMS campaigns into projects
-- **User Management**: Multi-user support with authentication and authorization
-- **Dashboard Analytics**: Real-time monitoring and reporting of system activities
-- **Task Management**: Background task processing for bulk operations
+## Core Functionality
+- **Phone Number Generation**: Generate up to 1 million phone numbers per request with carrier detection
+- **Phone Number Validation**: Real-time validation with carrier information
+- **SMS Campaigns**: Bulk SMS sending with delivery tracking and analytics
+- **Project Management**: Organize phone operations and campaigns into projects
+- **Dashboard Analytics**: System monitoring, reporting, and performance metrics
 
-The platform is designed for businesses and organizations that need to manage large volumes of phone numbers, validate contact information, and send SMS communications at scale.
+## Architecture
+- **Backend**: Django REST API (`god_bless_backend/`) with PostgreSQL/SQLite database support
+- **Frontend**: React TypeScript SPA (`god_bless_platform/`) with real-time WebSocket integration
+- **Infrastructure**: Docker containerization with Redis for caching and Celery for background tasks
 
 ## Key Features
-
-- Real-time WebSocket connections for live updates
-- Bulk import/export functionality for phone numbers
-- Advanced filtering and search capabilities
-- Comprehensive audit logging and security features
-- Multi-tenant architecture supporting multiple projects
-- Background task processing with Celery
-- RESTful API with comprehensive documentation
+- Real-time progress tracking via WebSockets
+- Multi-database support (PostgreSQL for production, SQLite for development)
+- Comprehensive testing and validation systems
+- Scalable SMS delivery infrastructure
+- User authentication and project-based access control

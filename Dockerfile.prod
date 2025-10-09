@@ -1,0 +1,63 @@
+# Multi-stage production build
+FROM node:18-alpine as frontend-builder
+
+WORKDIR /frontend
+COPY god_bless_platform/package*.json ./
+RUN npm ci --only=production
+
+COPY god_bless_platform/ ./
+RUN npm run build
+
+# Backend + Frontend production image
+FROM python:3.11-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    nginx \
+    postgresql-client \
+    redis-tools \
+    gcc \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN useradd -r -u 1000 -m -d /app -s /bin/bash appuser
+
+# Set working directory
+WORKDIR /app
+
+# Copy backend requirements and install
+COPY god_bless_backend/requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy backend code
+COPY god_bless_backend/ ./
+
+# Copy built frontend
+COPY --from=frontend-builder /frontend/dist ./frontend_build/
+
+# Create directories
+RUN mkdir -p /app/static_cdn /app/media /app/logs \
+    && chown -R appuser:appuser /app
+
+# Copy nginx configuration
+COPY nginx.prod.conf /etc/nginx/sites-available/default
+
+# Copy startup script
+COPY start-prod.sh /start-prod.sh
+RUN chmod +x /start-prod.sh
+
+# Collect static files
+RUN python manage.py collectstatic --noinput --settings=god_bless_pro.settings
+
+# Set ownership
+RUN chown -R appuser:appuser /app
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD curl -f http://localhost/api/health/ || exit 1
+
+EXPOSE 80
+
+CMD ["/start-prod.sh"]

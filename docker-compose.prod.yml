@@ -1,0 +1,141 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  database:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-god_bless_db}
+      POSTGRES_USER: ${POSTGRES_USER:-god_bless_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-god_bless_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Django Backend + Frontend (Single Container)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    environment:
+      # Django Settings
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: false
+      USE_POSTGRES: true
+      ALLOWED_HOSTS: ${DOMAIN}
+
+      # Database
+      POSTGRES_DB: ${POSTGRES_DB:-god_bless_db}
+      POSTGRES_USER: ${POSTGRES_USER:-god_bless_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: database
+      POSTGRES_PORT: 5432
+
+      # Redis
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+
+      # CORS & Security
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN}
+      CSRF_TRUSTED_ORIGINS: https://${DOMAIN}
+
+      # Email (Optional)
+      EMAIL_HOST: ${EMAIL_HOST:-}
+      EMAIL_HOST_USER: ${EMAIL_HOST_USER:-}
+      EMAIL_HOST_PASSWORD: ${EMAIL_HOST_PASSWORD:-}
+      EMAIL_PORT: ${EMAIL_PORT:-587}
+      EMAIL_USE_TLS: ${EMAIL_USE_TLS:-true}
+
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - static_files:/app/static_cdn
+      - media_files:/app/media
+      - app_logs:/app/logs
+
+  # Celery Worker
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    command: celery -A god_bless_pro worker -l info
+    environment:
+      # Same as app service
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: false
+      USE_POSTGRES: true
+      POSTGRES_DB: ${POSTGRES_DB:-god_bless_db}
+      POSTGRES_USER: ${POSTGRES_USER:-god_bless_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: database
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      - database
+      - redis
+      - app
+    volumes:
+      - media_files:/app/media
+      - app_logs:/app/logs
+
+  # Celery Beat Scheduler
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    command: celery -A god_bless_pro beat -l info
+    environment:
+      # Same as app service
+      SECRET_KEY: ${SECRET_KEY}
+      DEBUG: false
+      USE_POSTGRES: true
+      POSTGRES_DB: ${POSTGRES_DB:-god_bless_db}
+      POSTGRES_USER: ${POSTGRES_USER:-god_bless_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST: database
+      POSTGRES_PORT: 5432
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    depends_on:
+      - database
+      - redis
+      - app
+    volumes:
+      - app_logs:/app/logs
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_files:
+  media_files:
+  app_logs:
