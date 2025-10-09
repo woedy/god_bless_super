@@ -3,7 +3,7 @@ FROM node:18-alpine as frontend-builder
 
 WORKDIR /frontend
 COPY god_bless_platform/package*.json ./
-RUN npm ci --only=production
+RUN npm ci
 
 COPY god_bless_platform/ ./
 RUN npm run build
