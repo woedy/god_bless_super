@@ -61,10 +61,39 @@ echo "=== End Debug ==="
 
 # Check frontend build exists
 if [ ! -d "/app/frontend_build" ] || [ ! -f "/app/frontend_build/index.html" ]; then
-    echo "ERROR: Frontend build not found at /app/frontend_build/"
-    echo "Available files in /app/:"
-    ls -la /app/
-    exit 1
+    echo "WARNING: Frontend build not found at /app/frontend_build/"
+    echo "Creating fallback frontend directory..."
+    mkdir -p /app/frontend_build
+    cat > /app/frontend_build/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>God Bless Platform</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .status { padding: 20px; background: #f0f0f0; border-radius: 5px; }
+        .api-link { color: #007bff; text-decoration: none; }
+        .api-link:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>God Bless Platform</h1>
+        <div class="status">
+            <h2>System Status</h2>
+            <p>✅ Backend API is running</p>
+            <p>⚠️ Frontend build not available</p>
+            <p>Access the API at: <a href="/api/" class="api-link">/api/</a></p>
+            <p>Access admin at: <a href="/admin/" class="api-link">/admin/</a></p>
+        </div>
+    </div>
+</body>
+</html>
+EOF
+    echo "Fallback frontend created"
 fi
 
 # Check static files
