@@ -9,9 +9,9 @@ from kombu import Queue, Exchange
 
 # Performance-optimized Celery configuration
 CELERY_PERFORMANCE_CONFIG = {
-    # Broker Configuration
-    'broker_url': os.environ.get('CELERY_BROKER_URL', 'redis://localhost:6379/0'),
-    'result_backend': os.environ.get('CELERY_RESULT_BACKEND', 'redis://localhost:6379/0'),
+    # Broker Configuration - Use Django settings, fallback to service name
+    'broker_url': os.environ.get('CELERY_BROKER_URL', 'redis://redis:6379/0'),
+    'result_backend': os.environ.get('CELERY_RESULT_BACKEND', 'redis://redis:6379/0'),
     
     # Connection Pool Optimization
     'broker_pool_limit': 20,
