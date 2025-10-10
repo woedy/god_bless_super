@@ -34,17 +34,12 @@ services:
       context: .
     ports:
       - "${PORT:-6161}:6161"
-    command:
-      [
-        "/bin/bash",
-        "-c",
-        "./docker-entrypoint-sqlite.sh daphne -b 0.0.0.0 -p 6161 god_bless_pro.asgi:application",
-      ]
+    command: ["python", "manage.py", "runserver", "0.0.0.0:6161"]
     environment:
       - DOCKER_ENV=true
       - SECRET_KEY=${SECRET_KEY:-django-insecure-development-key-change-in-production-12345678901234567890}
       - DEBUG=${DEBUG:-True}
-      - USE_POSTGRES=${USE_POSTGRES:-false}
+      - USE_POSTGRES=${USE_POSTGRES:-true}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-development-redis-password-123}
@@ -67,17 +62,21 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      db:
+        condition: service_healthy
     restart: unless-stopped
     volumes:
       # Development: mount source code for hot reload
-      - ${MOUNT_SOURCE:-.}:/god_bless_django
+      - .:/god_bless_django
       # Mount SQLite database file specifically
       - ./db.sqlite3:/god_bless_django/db.sqlite3
       # Production: use named volumes for static/media files
       - static_files:/god_bless_django/static_cdn
       - media_files:/god_bless_django/media
+    env_file:
+      - .env.sqlite
 
-  # React Frontend Application (Development only)
+  # React Frontend Application
   frontend:
     build:
       context: ${FRONTEND_CONTEXT:-../god_bless_platform}
@@ -96,24 +95,17 @@ services:
     depends_on:
       - backend
     restart: unless-stopped
-    profiles:
-      - development
 
   # Celery Worker
   celery:
     build:
       context: .
-    command:
-      [
-        "/bin/bash",
-        "-c",
-        "sleep 10 && celery -A god_bless_pro worker -l ${CELERY_LOG_LEVEL:-INFO}",
-      ]
+    command: ["celery", "-A", "god_bless_pro", "worker", "-l", "${CELERY_LOG_LEVEL:-INFO}"]
     environment:
       - DOCKER_ENV=true
       - SECRET_KEY=${SECRET_KEY:-django-insecure-development-key-change-in-production-12345678901234567890}
       - DEBUG=${DEBUG:-True}
-      - USE_POSTGRES=${USE_POSTGRES:-false}
+      - USE_POSTGRES=${USE_POSTGRES:-true}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-development-redis-password-123}
@@ -129,9 +121,10 @@ services:
     depends_on:
       - redis
       - backend
+      - db
     restart: unless-stopped
     volumes:
-      - ${MOUNT_SOURCE:-.}:/god_bless_django
+      - .:/god_bless_django
       - ./db.sqlite3:/god_bless_django/db.sqlite3
       - media_files:/god_bless_django/media
 
@@ -139,17 +132,12 @@ services:
   celery-beat:
     build:
       context: .
-    command:
-      [
-        "/bin/bash",
-        "-c",
-        "sleep 15 && celery -A god_bless_pro beat -l ${CELERY_LOG_LEVEL:-INFO}",
-      ]
+    command: ["celery", "-A", "god_bless_pro", "beat", "-l", "${CELERY_LOG_LEVEL:-INFO}"]
     environment:
       - DOCKER_ENV=true
       - SECRET_KEY=${SECRET_KEY:-django-insecure-development-key-change-in-production-12345678901234567890}
       - DEBUG=${DEBUG:-True}
-      - USE_POSTGRES=${USE_POSTGRES:-false}
+      - USE_POSTGRES=${USE_POSTGRES:-true}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD:-development-redis-password-123}
@@ -165,9 +153,10 @@ services:
     depends_on:
       - redis
       - backend
+      - db
     restart: unless-stopped
     volumes:
-      - ${MOUNT_SOURCE:-.}:/god_bless_django
+      - .:/god_bless_django
       - ./db.sqlite3:/god_bless_django/db.sqlite3
 
 volumes:

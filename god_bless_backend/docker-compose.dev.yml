@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:alpine
+    command: redis-server --requirepass development-redis-password-123
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Django Backend Application - Simplified for local development
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "6161:6161"
+    environment:
+      - DEBUG=True
+      - SECRET_KEY=django-insecure-dev-key-1234567890123456789012345678901234567890
+      - USE_POSTGRES=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=development-redis-password-123
+      - ALLOWED_HOSTS=*
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      # Mount source code for development
+      - .:/god_bless_django
+      # Mount SQLite database
+      - ./db.sqlite3:/god_bless_django/db.sqlite3
+      # Mount static and media files
+      - static_files:/god_bless_django/static_cdn
+      - media_files:/god_bless_django/media
+
+volumes:
+  static_files:
+  media_files:
