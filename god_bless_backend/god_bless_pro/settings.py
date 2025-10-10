@@ -313,24 +313,49 @@ LOGGING = {
             'class': 'logging.StreamHandler',
             'formatter': 'simple',
         },
-        'file': {
-            'level': 'INFO',
-            'class': 'logging.handlers.RotatingFileHandler',
-            'filename': os.path.join(BASE_DIR, 'logs', 'django.log'),
-            'maxBytes': 1024*1024*15,  # 15MB
-            'backupCount': 10,
-            'formatter': 'verbose',
-        },
     },
     'root': {
-        'handlers': ['console', 'file'],
+        'handlers': ['console'],
         'level': 'INFO',
     },
     'loggers': {
         'django': {
-            'handlers': ['console', 'file'],
+            'handlers': ['console'],
             'level': 'INFO',
             'propagate': False,
         },
     },
 }
+
+# Add file logging only if logs directory is writable (for production)
+try:
+    import os
+    logs_dir = os.path.join(BASE_DIR, 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir, exist_ok=True)
+
+    # Test if we can write to the logs directory
+    test_file = os.path.join(logs_dir, 'test.log')
+    with open(test_file, 'w') as f:
+        f.write('test')
+
+    # If successful, add file handler
+    LOGGING['handlers']['file'] = {
+        'level': 'INFO',
+        'class': 'logging.handlers.RotatingFileHandler',
+        'filename': os.path.join(BASE_DIR, 'logs', 'django.log'),
+        'maxBytes': 1024*1024*15,  # 15MB
+        'backupCount': 10,
+        'formatter': 'verbose',
+    }
+
+    # Update root and django loggers to include file handler
+    LOGGING['root']['handlers'] = ['console', 'file']
+    LOGGING['loggers']['django']['handlers'] = ['console', 'file']
+
+    # Clean up test file
+    os.remove(test_file)
+
+except (OSError, PermissionError):
+    # If file logging fails, keep only console logging
+    pass
