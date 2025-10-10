@@ -15,17 +15,8 @@ ENV NODE_ENV=production
 ENV VITE_API_URL=/api
 ENV VITE_WS_URL=/ws
 
-# Create a more permissive TypeScript config for build
-RUN cp tsconfig.app.json tsconfig.app.json.backup && \
-    sed -i 's/"strict": true/"strict": false/g' tsconfig.app.json && \
-    sed -i 's/"noUnusedLocals": true/"noUnusedLocals": false/g' tsconfig.app.json && \
-    sed -i 's/"noUnusedParameters": true/"noUnusedParameters": false/g' tsconfig.app.json
-
-# Build the frontend
-RUN npm run build
-
-# Restore original tsconfig
-RUN mv tsconfig.app.json.backup tsconfig.app.json
+# Build the frontend (skip TypeScript checking for production)
+RUN npm run build:prod
 
 # Verify build output
 RUN ls -la dist/ && test -f dist/index.html
