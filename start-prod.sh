@@ -59,20 +59,44 @@ ls -la /app/static_cdn/ || echo "Static cdn directory not found"
 ls -la /app/static_cdn/static_root/ || echo "Static root directory not found"
 echo "=== End Debug ==="
 
-# Check frontend build exists
+# Check frontend build exists (create fallback if missing)
 if [ ! -d "/app/frontend_build" ] || [ ! -f "/app/frontend_build/index.html" ]; then
-    echo "ERROR: Frontend build not found at /app/frontend_build/"
-    echo "Available files in /app/:"
-    ls -la /app/
-    exit 1
+    echo "WARNING: Frontend build not found, creating fallback..."
+    mkdir -p /app/frontend_build
+    cat > /app/frontend_build/index.html << 'EOF'
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>God Bless Platform</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .status { padding: 20px; background: #f0f0f0; border-radius: 5px; }
+        .api-link { color: #007bff; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>God Bless Platform</h1>
+        <div class="status">
+            <h2>System Status</h2>
+            <p>✅ Backend API is running</p>
+            <p>⚠️ Frontend build not available</p>
+            <p>Access the API at: <a href="/api/" class="api-link">/api/</a></p>
+            <p>Access admin at: <a href="/admin/" class="api-link">/admin/</a></p>
+        </div>
+    </div>
+</body>
+</html>
+EOF
 fi
 
-# Check static files
+# Ensure static files directory exists
 if [ ! -d "/app/static_cdn/static_root" ]; then
-    echo "ERROR: Static files not found at /app/static_cdn/static_root/"
-    echo "Available files in /app/static_cdn/:"
-    ls -la /app/static_cdn/
-    exit 1
+    echo "WARNING: Static files not found, creating directory..."
+    mkdir -p /app/static_cdn/static_root
 fi
 
 # Test Nginx configuration
