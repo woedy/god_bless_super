@@ -11,9 +11,13 @@ RUN npm ci
 COPY god_bless_platform/ ./
 
 # Set environment variables for production
+# Using relative paths so they work with any domain
 ENV NODE_ENV=production
 ENV VITE_API_URL=/api
 ENV VITE_WS_URL=/ws
+ENV VITE_APP_NAME="God Bless Platform"
+ENV VITE_VERSION=1.0.0
+ENV VITE_ENVIRONMENT=production
 
 # Build the frontend (skip TypeScript checking for production)
 RUN npm run build:prod
