@@ -1,8 +1,10 @@
 # Coolify Deployment Configuration Alignment Check
+
 **Date:** 2025-10-10  
 **Status:** ✅ ALL CONFIGURATIONS ALIGNED
 
 ## Executive Summary
+
 All deployment configuration files have been verified and aligned for Coolify deployment. The frontend (god_bless_platform) will be served correctly from the root URL.
 
 ---
@@ -10,11 +12,13 @@ All deployment configuration files have been verified and aligned for Coolify de
 ## 1. ROOT LEVEL FILES (Used by Coolify)
 
 ### ✅ Dockerfile.prod
+
 **Location:** `/Dockerfile.prod`  
 **Status:** ALIGNED  
 **Purpose:** Builds both frontend and backend in single container
 
 **Key Configurations:**
+
 - Frontend build stage: `node:18-alpine`
 - Builds from: `god_bless_platform/`
 - Build command: `npm run build:prod` (skips TypeScript checking)
@@ -26,11 +30,13 @@ All deployment configuration files have been verified and aligned for Coolify de
   - `VITE_WS_URL=/ws`
 
 ### ✅ docker-compose.prod.yml
+
 **Location:** `/docker-compose.prod.yml`  
 **Status:** ALIGNED  
 **Purpose:** Orchestrates all services for Coolify
 
 **Services:**
+
 1. **database** - PostgreSQL 15
 2. **redis** - Redis 7
 3. **app** - Django + Frontend (port 80)
@@ -38,17 +44,20 @@ All deployment configuration files have been verified and aligned for Coolify de
 5. **scheduler** - Celery beat
 
 **Key Points:**
+
 - Uses `Dockerfile.prod` for all services
 - App service exposes port 80
 - Proper health checks configured
 - Volumes for static files, media, logs
 
 ### ✅ nginx.prod.conf
+
 **Location:** `/nginx.prod.conf`  
 **Status:** ALIGNED  
 **Purpose:** Serves frontend and proxies backend
 
 **Configuration:**
+
 ```nginx
 # Static assets (regex location - processed first)
 location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
@@ -75,11 +84,13 @@ location /ws/ {
 ```
 
 ### ✅ start-prod.sh
+
 **Location:** `/start-prod.sh`  
 **Status:** ALIGNED  
 **Purpose:** Startup script for app container
 
 **Sequence:**
+
 1. Wait for PostgreSQL
 2. Wait for Redis
 3. Run migrations
@@ -92,38 +103,46 @@ location /ws/ {
 ## 2. FRONTEND CONFIGURATION (god_bless_platform/)
 
 ### ✅ package.json
+
 **Location:** `god_bless_platform/package.json`  
 **Status:** ALIGNED
 
 **Build Scripts:**
+
 - `build`: `tsc -b && vite build` (dev - with type checking)
 - `build:prod`: `vite build` (production - skips type checking) ✅
 - `build:vite`: `vite build` (fallback)
 
 ### ✅ vite.config.ts
+
 **Location:** `god_bless_platform/vite.config.ts`  
 **Status:** ALIGNED
 
 **Key Settings:**
+
 - Output directory: `dist` ✅
 - Path alias: `@` → `./src` ✅
 - Build optimizations: code splitting, sourcemaps ✅
 - Dev proxy configured (not used in production)
 
 ### ✅ TypeScript Configuration
+
 **Files:** `tsconfig.json`, `tsconfig.app.json`, `tsconfig.node.json`  
 **Status:** ALIGNED
 
 **Key Settings:**
+
 - `noEmit: true` - Vite handles bundling ✅
 - Path mapping configured ✅
 - Strict mode enabled (but skipped in prod build) ✅
 
 ### ✅ index.html
+
 **Location:** `god_bless_platform/index.html`  
 **Status:** ALIGNED
 
 **Configuration:**
+
 - Standard Vite entry point ✅
 - No base path issues ✅
 - Serves from root `/` ✅
@@ -133,20 +152,24 @@ location /ws/ {
 ## 3. BACKEND CONFIGURATION (god_bless_backend/)
 
 ### ✅ Django Settings
+
 **Location:** `god_bless_backend/god_bless_pro/settings.py`  
 **Status:** ALIGNED
 
 **Key Settings:**
+
 - `STATIC_ROOT = /app/static_cdn/static_root/` ✅
 - `STATIC_URL = /static/` ✅
 - `MEDIA_ROOT = /app/media/` ✅
 - `MEDIA_URL = /media/` ✅
 
 ### ✅ Requirements
+
 **Location:** `god_bless_backend/requirements.txt`  
 **Status:** ALIGNED
 
 **Key Dependencies:**
+
 - Django, DRF, Daphne (WebSocket support) ✅
 - PostgreSQL, Redis clients ✅
 - Celery for background tasks ✅
@@ -156,10 +179,12 @@ location /ws/ {
 ## 4. ENVIRONMENT CONFIGURATION
 
 ### ✅ .env.example
+
 **Location:** `/.env.example`  
 **Status:** ALIGNED
 
 **Required Variables:**
+
 - `SECRET_KEY` - Django secret
 - `DOMAIN` - Your domain
 - `POSTGRES_PASSWORD` - Database password
@@ -169,6 +194,7 @@ location /ws/ {
 - `CSRF_TRUSTED_ORIGINS` - Trusted origins
 
 ### ✅ .env.coolify
+
 **Location:** `/.env.coolify`  
 **Status:** ALIGNED
 
@@ -179,10 +205,12 @@ location /ws/ {
 ## 5. DOCUMENTATION
 
 ### ✅ Deployment Guides
+
 **Location:** `docs/`  
 **Status:** ALIGNED
 
 **Available Guides:**
+
 - `COOLIFY_SIMPLE_DEPLOYMENT.md` - Quick start guide
 - `COOLIFY_DEPLOYMENT_GUIDE.md` - Comprehensive guide
 - `COOLIFY_ENVIRONMENT_SETUP.md` - Environment checklist
@@ -191,10 +219,12 @@ location /ws/ {
 - `coolify-secrets-template.json` - Secrets template
 
 ### ✅ Setup Scripts
+
 **Location:** `scripts/`  
 **Status:** ALIGNED
 
 **Available Scripts:**
+
 - `coolify-deployment-setup.sh` - Linux/Mac setup
 - `coolify-deployment-setup.ps1` - Windows setup
 
@@ -203,6 +233,7 @@ location /ws/ {
 ## 6. DEPLOYMENT FLOW
 
 ### Build Process
+
 ```
 1. Coolify pulls code from Git
 2. Runs docker-compose.prod.yml
@@ -221,6 +252,7 @@ location /ws/ {
 ```
 
 ### Request Flow
+
 ```
 User → https://yourdomain.com
   ↓
@@ -242,16 +274,19 @@ Nginx
 ## 7. CRITICAL FIXES APPLIED
 
 ### Fix #1: TypeScript Build Failure
+
 **Problem:** `npm run build` failed with TypeScript errors  
 **Solution:** Added `build:prod` script that runs `vite build` (skips tsc)  
 **File:** `god_bless_platform/package.json`
 
 ### Fix #2: Nginx Permission Denied
+
 **Problem:** Nginx (www-data) couldn't access `/app/frontend_build/`  
 **Solution:** Added `chmod 755 /app` to allow directory traversal  
 **File:** `Dockerfile.prod`
 
 ### Fix #3: Nginx Configuration
+
 **Problem:** Nested location blocks and incorrect path resolution  
 **Solution:** Simplified to use `root /app/frontend_build` with proper try_files  
 **File:** `nginx.prod.conf`
@@ -261,6 +296,7 @@ Nginx
 ## 8. VERIFICATION CHECKLIST
 
 ### Pre-Deployment
+
 - [x] All Docker files present and valid
 - [x] docker-compose.prod.yml configured correctly
 - [x] nginx.prod.conf serves frontend from correct path
@@ -269,6 +305,7 @@ Nginx
 - [x] Permissions set correctly (755 for /app)
 
 ### Coolify Configuration
+
 - [ ] Project created in Coolify
 - [ ] Git repository connected
 - [ ] Build pack set to "Docker Compose"
@@ -277,6 +314,7 @@ Nginx
 - [ ] SSL certificate enabled
 
 ### Post-Deployment
+
 - [ ] All services healthy
 - [ ] Frontend loads at root URL
 - [ ] API accessible at /api/
@@ -290,6 +328,7 @@ Nginx
 ## 9. ENVIRONMENT VARIABLES FOR COOLIFY
 
 ### Required (Set in Coolify)
+
 ```bash
 # Security
 SECRET_KEY=<generate-with-django-command>
@@ -310,6 +349,7 @@ CSRF_TRUSTED_ORIGINS=https://yourdomain.com,https://www.yourdomain.com
 ```
 
 ### Optional (Recommended)
+
 ```bash
 # Superuser (first deployment only)
 CREATE_SUPERUSER=true
@@ -330,18 +370,22 @@ EMAIL_USE_TLS=true
 ## 10. TROUBLESHOOTING
 
 ### Issue: 500 Internal Server Error
+
 **Cause:** Nginx can't access frontend files  
 **Solution:** Verify `/app` has 755 permissions (fixed in Dockerfile.prod)
 
 ### Issue: Frontend not loading
+
 **Cause:** Nginx configuration incorrect  
 **Solution:** Verify nginx.prod.conf uses `root /app/frontend_build`
 
 ### Issue: Build fails with TypeScript errors
+
 **Cause:** Using `npm run build` instead of `npm run build:prod`  
 **Solution:** Dockerfile.prod now uses `build:prod`
 
 ### Issue: API calls fail
+
 **Cause:** CORS or proxy configuration  
 **Solution:** Verify CORS_ALLOWED_ORIGINS includes your domain
 
@@ -350,6 +394,7 @@ EMAIL_USE_TLS=true
 ## 11. NEXT STEPS
 
 1. **Deploy to Coolify:**
+
    - Push code to Git
    - Create Coolify project
    - Add environment variables
@@ -357,6 +402,7 @@ EMAIL_USE_TLS=true
    - Click Deploy
 
 2. **Verify Deployment:**
+
    - Check all services are healthy
    - Visit your domain
    - Test API endpoints

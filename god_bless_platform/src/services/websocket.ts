@@ -253,7 +253,20 @@ class WebSocketManager implements IWebSocketManager {
    * Build WebSocket URL with authentication
    */
   private buildWebSocketUrl(): string {
-    const url = new URL(this.config.url);
+    let wsUrl: string;
+
+    // Handle relative paths by converting to absolute WebSocket URL
+    if (this.config.url.startsWith('/')) {
+      // Convert relative path to absolute WebSocket URL
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      wsUrl = `${protocol}//${host}${this.config.url}`;
+    } else {
+      // Use the provided URL as-is
+      wsUrl = this.config.url;
+    }
+
+    const url = new URL(wsUrl);
 
     // Add authentication token if available
     const token = localStorage.getItem(STORAGE_KEYS.AUTH_TOKEN);

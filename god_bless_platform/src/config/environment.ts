@@ -49,17 +49,16 @@ function validateEnvironment(): void {
     )
   }
 
-  // Validate URLs
-  try {
-    new URL(import.meta.env.VITE_API_URL)
-  } catch {
-    throw new Error(`Invalid VITE_API_URL: ${import.meta.env.VITE_API_URL}`)
+  // Validate URLs (allow relative paths for production builds)
+  const apiUrl = import.meta.env.VITE_API_URL
+  if (!apiUrl.startsWith('/') && !apiUrl.startsWith('http://') && !apiUrl.startsWith('https://')) {
+    throw new Error(`Invalid VITE_API_URL: ${apiUrl}. Must be a relative path (/) or full URL (http/https)`)
   }
 
-  // Validate WebSocket URL format
+  // Validate WebSocket URL format (allow relative paths)
   const wsUrl = import.meta.env.VITE_WS_URL
-  if (!wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
-    throw new Error(`Invalid VITE_WS_URL format: ${wsUrl}. Must start with ws:// or wss://`)
+  if (!wsUrl.startsWith('/') && !wsUrl.startsWith('ws://') && !wsUrl.startsWith('wss://')) {
+    throw new Error(`Invalid VITE_WS_URL format: ${wsUrl}. Must be a relative path (/) or full URL (ws/wss)`)
   }
 }
 
