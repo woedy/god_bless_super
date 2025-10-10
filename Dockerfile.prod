@@ -47,18 +47,22 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy backend code
 COPY god_bless_backend/ ./
 
+# Create directories first
+RUN mkdir -p /app/static_cdn/static_root /app/static_cdn/static_files /app/media /app/logs /app/frontend_build
+
 # Copy built frontend
-COPY --from=frontend-builder /frontend/dist ./frontend_build/
+COPY --from=frontend-builder /frontend/dist /app/frontend_build/
+
+# Set proper permissions for frontend files (nginx needs to read them)
+RUN chmod -R 755 /app/frontend_build && \
+    chown -R www-data:www-data /app/frontend_build
 
 # Debug: Verify frontend copy
 RUN echo "=== Frontend Copy Debug ===" && \
     ls -la /app/frontend_build/ && \
+    test -f /app/frontend_build/index.html && \
+    echo "Frontend index.html found!" && \
     echo "=== End Frontend Copy Debug ==="
-
-# Create directories and set permissions
-RUN mkdir -p /app/static_cdn/static_root /app/static_cdn/static_files /app/media /app/logs \
-    && chown -R appuser:appuser /app \
-    && chmod -R 755 /app/frontend_build
 
 # Copy nginx configuration
 COPY nginx.prod.conf /etc/nginx/sites-available/default
@@ -73,8 +77,9 @@ RUN python manage.py collectstatic --noinput --clear --settings=god_bless_pro.se
 # Verify static files were collected
 RUN ls -la /app/static_cdn/static_root/ || echo "Static files directory empty"
 
-# Set ownership
-RUN chown -R appuser:appuser /app
+# Set ownership (exclude frontend_build which is owned by www-data)
+RUN chown -R appuser:appuser /app/static_cdn /app/media /app/logs && \
+    find /app -maxdepth 1 -type f -exec chown appuser:appuser {} \;
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
