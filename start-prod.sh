@@ -61,7 +61,8 @@ echo "=== End Debug ==="
 
 # Check frontend build exists (create fallback if missing)
 if [ ! -d "/app/frontend_build" ] || [ ! -f "/app/frontend_build/index.html" ]; then
-    echo "WARNING: Frontend build not found, creating fallback..."
+    echo "WARNING: Frontend build not found at /app/frontend_build/"
+    echo "Creating fallback frontend directory..."
     mkdir -p /app/frontend_build
     cat > /app/frontend_build/index.html << 'EOF'
 <!DOCTYPE html>
@@ -75,6 +76,7 @@ if [ ! -d "/app/frontend_build" ] || [ ! -f "/app/frontend_build/index.html" ]; 
         .container { max-width: 600px; margin: 0 auto; }
         .status { padding: 20px; background: #f0f0f0; border-radius: 5px; }
         .api-link { color: #007bff; text-decoration: none; }
+        .api-link:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -91,6 +93,7 @@ if [ ! -d "/app/frontend_build" ] || [ ! -f "/app/frontend_build/index.html" ]; 
 </body>
 </html>
 EOF
+    echo "Fallback frontend created"
 fi
 
 # Ensure static files directory exists

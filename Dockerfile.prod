@@ -1,22 +1,25 @@
-# Multi-stage production build
+# Simple frontend build
 FROM node:18-alpine as frontend-builder
 
 WORKDIR /frontend
-COPY god_bless_platform/package*.json ./
-RUN npm ci
 
+# Copy package files
+COPY god_bless_platform/package*.json ./
+RUN npm ci --only=production
+
+# Copy source code
 COPY god_bless_platform/ ./
 
-# Set build-time environment variables
+# Set environment variables for production
+ENV NODE_ENV=production
 ENV VITE_API_URL=/api
 ENV VITE_WS_URL=/ws
-ENV VITE_APP_NAME="God Bless Platform"
-ENV VITE_VERSION=1.0.0
-ENV VITE_ENVIRONMENT=production
-ENV VITE_ENABLE_ANALYTICS=false
 
-# Build frontend with error handling
-RUN npm run build || npx vite build --mode production || (echo "Build failed, creating fallback..." && mkdir -p dist && echo '<!DOCTYPE html><html><head><title>God Bless Platform</title></head><body><h1>God Bless Platform</h1><p>API available at <a href="/api/">/api/</a></p></body></html>' > dist/index.html)
+# Build with simple vite command (skip TypeScript checking)
+RUN npx vite build --mode production
+
+# Verify build output
+RUN ls -la dist/ && test -f dist/index.html
 
 # Backend + Frontend production image
 FROM python:3.11-slim
@@ -46,6 +49,11 @@ COPY god_bless_backend/ ./
 
 # Copy built frontend
 COPY --from=frontend-builder /frontend/dist ./frontend_build/
+
+# Debug: Verify frontend copy
+RUN echo "=== Frontend Copy Debug ===" && \
+    ls -la /app/frontend_build/ && \
+    echo "=== End Frontend Copy Debug ==="
 
 # Create directories and set permissions
 RUN mkdir -p /app/static_cdn/static_root /app/static_cdn/static_files /app/media /app/logs \
