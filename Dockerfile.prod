@@ -53,12 +53,16 @@ RUN mkdir -p /app/static_cdn/static_root /app/static_cdn/static_files /app/media
 # Copy built frontend
 COPY --from=frontend-builder /frontend/dist /app/frontend_build/
 
+# CRITICAL: Set /app directory permissions so nginx (www-data) can traverse into it
+RUN chmod 755 /app
+
 # Set proper permissions for frontend files (nginx needs to read them)
 RUN chmod -R 755 /app/frontend_build && \
     chown -R www-data:www-data /app/frontend_build
 
-# Debug: Verify frontend copy
+# Debug: Verify frontend copy and permissions
 RUN echo "=== Frontend Copy Debug ===" && \
+    ls -la /app/ && \
     ls -la /app/frontend_build/ && \
     test -f /app/frontend_build/index.html && \
     echo "Frontend index.html found!" && \
