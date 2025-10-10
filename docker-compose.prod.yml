@@ -81,7 +81,7 @@ services:
       redis:
         condition: service_healthy
     volumes:
-      - static_files:/app/static_cdn
+      # Note: static_cdn is NOT mounted as volume - it's baked into the image
       - media_files:/app/media
       - app_logs:/app/logs
 
@@ -143,6 +143,5 @@ services:
 volumes:
   postgres_data:
   redis_data:
-  static_files:
   media_files:
   app_logs:
