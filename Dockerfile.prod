@@ -20,7 +20,7 @@ ENV VITE_VERSION=1.0.0
 ENV VITE_ENVIRONMENT=production
 
 # Build the frontend (skip TypeScript checking for production)
-RUN npm run build:prod
+RUN npm ci && npm run build:prod
 
 # Verify build output
 RUN ls -la dist/ && test -f dist/index.html
