@@ -594,6 +594,50 @@ class PhoneNumberServiceClass {
   }
 
   /**
+   * Delete filtered phone numbers for a project
+   */
+  async deleteFilteredNumbers(projectId: string, filters: NumberFilters): Promise<ApiResponse<BulkOperationResponse>> {
+    console.log('PhoneNumberService - Deleting filtered numbers for project:', projectId, 'with filters:', filters)
+
+    // Get user ID from localStorage
+    const userData = localStorage.getItem('god_bless_user_data')
+    let userId = ''
+    if (userData) {
+      try {
+        const user = JSON.parse(userData)
+        userId = user.user_id || user.id
+      } catch (error) {
+        console.error('Failed to parse user data:', error)
+      }
+    }
+
+    // Build filter parameters for the request (same format as list endpoint)
+    const filterParams: Record<string, unknown> = {}
+
+    if (filters.search) filterParams.search = filters.search
+    if (filters.isValid !== undefined) filterParams.valid_number = filters.isValid.toString()
+    if (filters.carrier) filterParams.carrier = filters.carrier
+    if (filters.country) filterParams.country_name = filters.country
+    if (filters.lineType) filterParams.type = filters.lineType
+
+    const requestData = {
+      user_id: userId,
+      project_id: projectId,
+      ...filterParams
+    }
+
+    try {
+      const response = await apiClient.post<BulkOperationResponse>(API_ENDPOINTS.PHONE_NUMBERS.DELETE_FILTERED, requestData)
+
+      console.log('PhoneNumberService - Delete filtered response:', response)
+      return response
+    } catch (error) {
+      console.error('PhoneNumberService - Delete filtered error:', error)
+      throw error
+    }
+  }
+
+  /**
    * Bulk delete phone numbers
    */
   async bulkDeleteNumbers(phoneNumberIds: string[]): Promise<ApiResponse<BulkOperationResponse>> {

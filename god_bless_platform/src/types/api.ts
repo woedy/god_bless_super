@@ -324,6 +324,7 @@ export interface BulkOperationResponse {
   totalItems: number
   estimatedDuration: number
   batchCount: number
+  deleted_count?: number
 }
 
 // Search and Filter Types

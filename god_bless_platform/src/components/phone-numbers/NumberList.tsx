@@ -106,6 +106,8 @@ export const NumberList: React.FC<NumberListProps> = ({
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false)
   const [isDeleting, setIsDeleting] = useState<boolean>(false)
   const [showExportModal, setShowExportModal] = useState<boolean>(false)
+  const [showDeleteFilteredModal, setShowDeleteFilteredModal] = useState<boolean>(false)
+  const [isDeletingFiltered, setIsDeletingFiltered] = useState<boolean>(false)
 
   // Available filter options
   const [availableCarriers, setAvailableCarriers] = useState<string[]>([])
@@ -335,6 +337,46 @@ export const NumberList: React.FC<NumberListProps> = ({
     setShowExportModal(true)
   }
 
+  const handleDeleteFiltered = async () => {
+    try {
+      setIsDeletingFiltered(true)
+
+      // Build current filters for deletion
+      const currentFilters: NumberFilters = {
+        projectId: project.id,
+        search: searchQuery.trim() || undefined,
+        isValid: validationFilter !== 'all' ? validationFilter === 'valid' : undefined,
+        carrier: carrierFilter || undefined,
+        country: countryFilter || undefined,
+        lineType: lineTypeFilter || undefined
+      }
+
+      const response = await phoneNumberService.deleteFilteredNumbers(project.id, currentFilters)
+
+      if (response.success) {
+        const deletedCount = response.data?.deleted_count || 0
+        onSuccess?.(`Successfully deleted ${deletedCount} filtered phone numbers`)
+        setShowDeleteFilteredModal(false)
+
+        // Reset master filter options since deleted numbers might have affected available options
+        setMasterCarriers(new Set())
+        setMasterCountries(new Set())
+        setMasterLineTypes(new Set())
+
+        // Notify parent to refresh project data (statistics)
+        onProjectRefresh?.()
+
+        // Clear current filters after deletion
+        clearFilters()
+      }
+    } catch (error) {
+      console.error('Delete filtered failed:', error)
+      onError?.(error instanceof Error ? error.message : 'Failed to delete filtered phone numbers')
+    } finally {
+      setIsDeletingFiltered(false)
+    }
+  }
+
   const handleSort = (column: string) => {
     const newSortBy = sortBy === column ? `-${column}` : column
     setSortBy(newSortBy)
@@ -517,6 +559,17 @@ export const NumberList: React.FC<NumberListProps> = ({
             >
               Clear Filters
             </Button>
+
+            {/* Show Delete Filtered button only when there are active filters */}
+            {(searchQuery || validationFilter !== 'all' || carrierFilter || countryFilter || lineTypeFilter) && (
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => setShowDeleteFilteredModal(true)}
+              >
+                Delete Filtered
+              </Button>
+            )}
           </div>
 
           <div className="flex items-center gap-2">
@@ -638,6 +691,69 @@ export const NumberList: React.FC<NumberListProps> = ({
               loading={isDeleting}
             >
               Delete Numbers
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete Filtered Confirmation Modal */}
+      <Modal
+        isOpen={showDeleteFilteredModal}
+        onClose={() => setShowDeleteFilteredModal(false)}
+        title="Delete Filtered Numbers"
+        size="sm"
+      >
+        <div className="p-6">
+          <div className="flex items-center mb-4">
+            <div className="flex-shrink-0">
+              <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <h3 className="text-lg font-medium text-gray-900">
+                Delete Filtered Numbers
+              </h3>
+              <p className="text-sm text-gray-500">
+                This action cannot be undone.
+              </p>
+            </div>
+          </div>
+
+          <div className="mb-6">
+            <p className="text-gray-700 mb-4">
+              You are about to delete all phone numbers that match your current filters:
+            </p>
+
+            <div className="bg-gray-50 p-3 rounded-md text-sm">
+              <div className="space-y-1">
+                {searchQuery && <div><strong>Search:</strong> {searchQuery}</div>}
+                {validationFilter !== 'all' && <div><strong>Validation:</strong> {validationFilter === 'valid' ? 'Valid only' : 'Invalid only'}</div>}
+                {carrierFilter && <div><strong>Carrier:</strong> {carrierFilter}</div>}
+                {countryFilter && <div><strong>Country:</strong> {countryFilter}</div>}
+                {lineTypeFilter && <div><strong>Line Type:</strong> {lineTypeFilter}</div>}
+              </div>
+            </div>
+
+            <p className="text-gray-700 mt-4">
+              This will permanently delete <strong>{totalCount} phone numbers</strong> that match these filters.
+            </p>
+          </div>
+
+          <div className="flex justify-end gap-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteFilteredModal(false)}
+              disabled={isDeletingFiltered}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleDeleteFiltered}
+              loading={isDeletingFiltered}
+            >
+              Delete Filtered Numbers
             </Button>
           </div>
         </div>
