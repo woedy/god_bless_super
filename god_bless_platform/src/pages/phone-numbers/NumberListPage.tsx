@@ -3,7 +3,7 @@
  * Phone number list with filtering and export functionality
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { NumberList, FilterPanel, ExportDialog } from '../../components/phone-numbers'
@@ -48,6 +48,11 @@ export function NumberListPage() {
   })
   const [showFilters, setShowFilters] = useState<boolean>(false)
   const [showExportDialog, setShowExportDialog] = useState<boolean>(false)
+  
+  // Available filter options (populated from NumberList)
+  const [availableCarriers, setAvailableCarriers] = useState<string[]>([])
+  const [availableCountries, setAvailableCountries] = useState<string[]>([])
+  const [availableLineTypes, setAvailableLineTypes] = useState<string[]>([])
 
   // Load project data
   useEffect(() => {
@@ -119,6 +124,22 @@ export function NumberListPage() {
     setError(null)
   }
 
+  const handleInternalFiltersChange = useCallback((internalFilters: NumberFilters) => {
+    console.log('🔍 NumberListPage - Internal filters changed:', internalFilters)
+    setFilters(prev => {
+      // Only update if filters actually changed to prevent unnecessary re-renders
+      const hasChanged = Object.keys(internalFilters).some(key => {
+        const filterKey = key as keyof NumberFilters
+        return prev[filterKey] !== internalFilters[filterKey]
+      })
+
+      if (hasChanged) {
+        return { ...prev, ...internalFilters }
+      }
+      return prev
+    })
+  }, [])
+
   const clearMessages = () => {
     setError(null)
     setSuccessMessage(null)
@@ -127,6 +148,16 @@ export function NumberListPage() {
   const handleExportSuccess = (message: string) => {
     setSuccessMessage(message)
     setShowExportDialog(false)
+  }
+
+  const handleFilterOptionsUpdate = (options: {
+    carriers: string[]
+    countries: string[]
+    lineTypes: string[]
+  }) => {
+    setAvailableCarriers(options.carriers)
+    setAvailableCountries(options.countries)
+    setAvailableLineTypes(options.lineTypes)
   }
 
   if (isLoading) {
@@ -211,23 +242,6 @@ export function NumberListPage() {
               onClick={() => navigate(`/phone-numbers/generate?project=${projectId}`)}
             >
               Generate Numbers
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                console.log('🔍 TEST - Current filters:', filters)
-                console.log('🔍 TEST - Project ID:', projectId)
-                // Test with specific filters
-                const testFilters = {
-                  ...filters,
-                  isValid: true,
-                  carrier: 'AT&T'
-                }
-                console.log('🔍 TEST - Testing with filters:', testFilters)
-                setFilters(testFilters)
-              }}
-            >
-              Test Filters
             </Button>
           </div>
         </div>
@@ -371,7 +385,9 @@ export function NumberListPage() {
             onFiltersChange={handleFiltersChange}
             onApplyFilters={handleApplyFilters}
             onClearFilters={handleClearFilters}
-            availableLineTypes={['mobile', 'landline']}
+            availableCarriers={availableCarriers}
+            availableCountries={availableCountries}
+            availableLineTypes={availableLineTypes}
           />
         )}
 
@@ -409,6 +425,8 @@ export function NumberListPage() {
           filters={filters}
           onError={handleError}
           onSuccess={handleSuccess}
+          onFilterOptionsUpdate={handleFilterOptionsUpdate}
+          onInternalFiltersChange={handleInternalFiltersChange}
         />
 
         {/* Export Dialog */}
