@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:alpine
+    command: redis-server --requirepass development-redis-password-123
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # Django Backend Application (Minimal)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.minimal
+    ports:
+      - "6161:6161"
+    environment:
+      - DOCKER_ENV=true
+      - SECRET_KEY=django-insecure-development-key-change-in-production-12345678901234567890
+      - DEBUG=True
+      - USE_POSTGRES=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=development-redis-password-123
+      - ALLOWED_HOSTS=*
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - .:/god_bless_django
+      - ./db.sqlite3:/god_bless_django/db.sqlite3

@@ -1,0 +1,104 @@
+version: '3.8'
+
+services:
+  # Redis Cache & Message Broker
+  redis:
+    image: redis:alpine
+    command: redis-server --requirepass development-redis-password-123
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  # Django Backend Application (Simple)
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    ports:
+      - "6161:6161"
+    environment:
+      - DOCKER_ENV=true
+      - SECRET_KEY=django-insecure-development-key-change-in-production-12345678901234567890
+      - DEBUG=True
+      - USE_POSTGRES=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=development-redis-password-123
+      - CELERY_BROKER_URL=redis://:development-redis-password-123@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:development-redis-password-123@redis:6379/0
+      - ALLOWED_HOSTS=*
+      - CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3000
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - .:/god_bless_django
+      - ./db.sqlite3:/god_bless_django/db.sqlite3
+
+  # React Frontend Application
+  frontend:
+    build:
+      context: ../god_bless_platform
+      dockerfile: Dockerfile.dev
+    ports:
+      - "5173:5173"
+    volumes:
+      - ../god_bless_platform:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:6161/api
+      - VITE_WS_URL=ws://localhost:6161/ws/
+      - VITE_APP_NAME=God Bless Platform
+      - VITE_VERSION=1.0.0
+      - VITE_ENVIRONMENT=development
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # Celery Worker
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    command: ["/bin/bash", "-c", "sleep 10 && celery -A god_bless_pro worker -l INFO"]
+    environment:
+      - DOCKER_ENV=true
+      - SECRET_KEY=django-insecure-development-key-change-in-production-12345678901234567890
+      - DEBUG=True
+      - USE_POSTGRES=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=development-redis-password-123
+      - CELERY_BROKER_URL=redis://:development-redis-password-123@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:development-redis-password-123@redis:6379/0
+    depends_on:
+      - redis
+      - backend
+    restart: unless-stopped
+    volumes:
+      - .:/god_bless_django
+      - ./db.sqlite3:/god_bless_django/db.sqlite3
+
+  # Celery Beat Scheduler
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile.simple
+    command: ["/bin/bash", "-c", "sleep 15 && celery -A god_bless_pro beat -l INFO"]
+    environment:
+      - DOCKER_ENV=true
+      - SECRET_KEY=django-insecure-development-key-change-in-production-12345678901234567890
+      - DEBUG=True
+      - USE_POSTGRES=false
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=development-redis-password-123
+      - CELERY_BROKER_URL=redis://:development-redis-password-123@redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://:development-redis-password-123@redis:6379/0
+    depends_on:
+      - redis
+      - backend
+    restart: unless-stopped
+    volumes:
+      - .:/god_bless_django
+      - ./db.sqlite3:/god_bless_django/db.sqlite3

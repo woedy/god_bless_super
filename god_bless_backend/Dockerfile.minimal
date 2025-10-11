@@ -1,0 +1,51 @@
+# Minimal Dockerfile for debugging
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    redis-tools \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create application directory
+RUN mkdir -p /god_bless_django
+WORKDIR /god_bless_django
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Copy application code
+COPY . .
+
+# Create a simple test script
+RUN echo '#!/bin/bash' > /god_bless_django/test-script.sh && \
+    echo 'echo "Test script executed successfully!"' >> /god_bless_django/test-script.sh && \
+    chmod +x /god_bless_django/test-script.sh
+
+# Create the entrypoint script
+RUN echo '#!/bin/bash' > /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'set -e' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'echo "Starting God Bless Backend with SQLite..."' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'echo "Working directory: $(pwd)"' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'echo "Listing files:"' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'ls -la' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'echo "Running migrations..."' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'python manage.py migrate' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'echo "Starting application..."' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    echo 'exec "$@"' >> /god_bless_django/docker-entrypoint-sqlite.sh && \
+    chmod +x /god_bless_django/docker-entrypoint-sqlite.sh
+
+# Verify the script was created correctly
+RUN ls -la /god_bless_django/docker-entrypoint-sqlite.sh && \
+    head -5 /god_bless_django/docker-entrypoint-sqlite.sh
+
+# Expose port
+EXPOSE 6161
+
+# Default command
+CMD ["/bin/bash", "-c", "/god_bless_django/docker-entrypoint-sqlite.sh python manage.py runserver 0.0.0.0:6161"]
