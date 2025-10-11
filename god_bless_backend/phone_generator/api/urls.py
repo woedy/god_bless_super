@@ -7,7 +7,7 @@ from phone_generator.api.views import (
     get_generation_tasks_view, get_task_progress_view, cancel_task_view,
     bulk_validate_numbers_view, get_phone_statistics_view, get_active_tasks_view,
     generate_numbers_with_config_view, export_phone_numbers_view, import_phone_numbers_view,
-    import_sms_recipients_view
+    import_sms_recipients_view, delete_filtered_numbers_view
 )
 
 
@@ -41,6 +41,7 @@ urlpatterns = [
     # Existing endpoints
     path('clear-numbers/', clear_numbers_view, name="clear_numbers_view"),
     path('delete-all/', delete_all_view, name="delete_all"),
+    path('delete-filtered/', delete_filtered_numbers_view, name="delete_filtered_numbers_view"),
     path('total-wipe/', total_wipe_view, name="total_wipe_view"),
     path('delete-numbers/', delete_numbers_view, name="delete_numbers_view"),
     path('list-numbers/', get_all_numbers_view, name="get_all_numbers_view"),

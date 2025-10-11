@@ -46,6 +46,7 @@ export const API_ENDPOINTS = {
     EXPORT: '/phone-generator/export/',
     IMPORT: '/phone-generator/import/',
     DELETE_ALL: '/phone-generator/delete-all/',
+    DELETE_FILTERED: '/phone-generator/delete-filtered/',
     STATISTICS: '/phone-generator/statistics/',
     COUNTRIES: '/phone-generator/countries/', // Mock endpoint
     CARRIERS: '/phone-generator/carriers/', // Mock endpoint

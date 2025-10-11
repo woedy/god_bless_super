@@ -678,10 +678,93 @@ def validate_numbers_view(request):
                 number.status = 'Active'
                 number.save()
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def delete_filtered_numbers_view(request):
+    """Delete phone numbers based on applied filters"""
+    payload = {}
+    data = {}
+    errors = {}
+
+    if request.method == 'POST':
+        user_id = request.data.get('user_id', None)
+        project_id = request.data.get('project_id', None)
+
+        # Get filter parameters (same as list-numbers endpoint)
+        search_query = request.data.get('search', '')
+        valid_number = request.data.get('valid_number', '')
+        carrier = request.data.get('carrier', '')
+        phone_type = request.data.get('type', '')
+        country_name = request.data.get('country_name', '')
+
+        if not user_id:
+            errors['user_id'] = ['User ID is required.']
+        if not project_id:
+            errors['project_id'] = ['Project ID is required.']
+
+        try:
+            user = User.objects.get(user_id=user_id)
+        except User.DoesNotExist:
+            errors['user_id'] = ['User does not exist.']
+
+        try:
+            project = Project.objects.get(id=project_id)
+        except Project.DoesNotExist:
+            errors['project_id'] = ['Project does not exist.']
+
+        if errors:
+            payload['message'] = "Errors"
+            payload['errors'] = errors
+            return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+        # Build the base query for numbers to delete
+        numbers_to_delete = PhoneNumber.objects.filter(user=user, project=project, is_archived=False)
+
+        # Apply the same filters as the list-numbers endpoint
+        if search_query:
+            numbers_to_delete = numbers_to_delete.filter(
+                Q(phone_number__icontains=search_query)
+            )
+
+        # Filter by validation status
+        if valid_number:
+            if valid_number.lower() == 'true':
+                numbers_to_delete = numbers_to_delete.filter(valid_number=True)
+            elif valid_number.lower() == 'false':
+                numbers_to_delete = numbers_to_delete.filter(valid_number=False)
+            elif valid_number.lower() == 'null':
+                numbers_to_delete = numbers_to_delete.filter(valid_number__isnull=True)
+
+        # Filter by carrier
+        if carrier:
+            numbers_to_delete = numbers_to_delete.filter(carrier__icontains=carrier)
+
+        # Filter by phone type
+        if phone_type:
+            numbers_to_delete = numbers_to_delete.filter(type__iexact=phone_type)
+
+        # Filter by country name
+        if country_name:
+            numbers_to_delete = numbers_to_delete.filter(country_name__icontains=country_name)
+
+        # Count how many numbers will be deleted before deleting
+        count_to_delete = numbers_to_delete.count()
+
+        if count_to_delete == 0:
+            data['message'] = 'No numbers match the specified filters'
+            data['deleted_count'] = 0
+        else:
+            # Perform the deletion
+            deleted_count, _ = numbers_to_delete.delete()
+
+            data['message'] = f'Successfully deleted {deleted_count} phone numbers'
+            data['deleted_count'] = deleted_count
+
         payload['message'] = "Successful"
         payload['data'] = data
 
-    return Response(payload)
+    return Response(payload, status=status.HTTP_200_OK)
 
 
 @api_view(['POST'])
