@@ -18,7 +18,7 @@ interface TableColumn {
 
 interface NumberListProps {
   project: Project
-  filters?: NumberFilters
+  filters: NumberFilters
   onError?: (error: string) => void
   onSuccess?: (message: string) => void
   onFilterOptionsUpdate?: (options: {
@@ -27,6 +27,7 @@ interface NumberListProps {
     lineTypes: string[]
   }) => void
   onInternalFiltersChange?: (filters: NumberFilters) => void
+  onProjectRefresh?: () => void
 }
 
 export const NumberList: React.FC<NumberListProps> = ({
@@ -35,7 +36,8 @@ export const NumberList: React.FC<NumberListProps> = ({
   onError,
   onSuccess,
   onFilterOptionsUpdate,
-  onInternalFiltersChange
+  onInternalFiltersChange,
+  onProjectRefresh
 }) => {
   // Data state
   const [numbers, setNumbers] = useState<PhoneNumber[]>([])
@@ -110,6 +112,11 @@ export const NumberList: React.FC<NumberListProps> = ({
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
   const [availableLineTypes, setAvailableLineTypes] = useState<string[]>([])
 
+  // Master filter options (accumulated from all results, not just current page)
+  const [masterCarriers, setMasterCarriers] = useState<Set<string>>(new Set())
+  const [masterCountries, setMasterCountries] = useState<Set<string>>(new Set())
+  const [masterLineTypes, setMasterLineTypes] = useState<Set<string>>(new Set())
+
   // Load numbers when filters or pagination change (debounced to prevent excessive API calls)
   useEffect(() => {
     const timeoutId = setTimeout(() => {
@@ -123,6 +130,13 @@ export const NumberList: React.FC<NumberListProps> = ({
   useEffect(() => {
     setSelectAll(selectedNumbers.size > 0 && selectedNumbers.size === numbers.length)
   }, [selectedNumbers, numbers])
+
+  // Reset master filter options when project changes
+  useEffect(() => {
+    setMasterCarriers(new Set())
+    setMasterCountries(new Set())
+    setMasterLineTypes(new Set())
+  }, [project.id])
 
   const loadNumbers = useCallback(async () => {
     try {
@@ -183,20 +197,40 @@ export const NumberList: React.FC<NumberListProps> = ({
         setTotalCount(response.data.count)
         setTotalPages(response.data.totalPages)
 
-        // Extract unique filter options
-        const carriers = [...new Set(response.data.results.map(n => n.carrier).filter(Boolean) as string[])]
-        const countries = [...new Set(response.data.results.map(n => n.country).filter(Boolean) as string[])]
-        const lineTypes = [...new Set(response.data.results.map(n => n.lineType).filter(Boolean) as string[])]
+        // Extract unique filter options from current results
+        const currentCarriers = [...new Set(response.data.results.map(n => n.carrier).filter(Boolean) as string[])]
+        const currentCountries = [...new Set(response.data.results.map(n => n.country).filter(Boolean) as string[])]
+        const currentLineTypes = [...new Set(response.data.results.map(n => n.lineType).filter(Boolean) as string[])]
 
-        setAvailableCarriers(carriers)
-        setAvailableCountries(countries)
-        setAvailableLineTypes(lineTypes)
+        // Update master sets (accumulate all unique values across all pages)
+        setMasterCarriers(prev => {
+          const updated = new Set(prev)
+          currentCarriers.forEach(carrier => updated.add(carrier))
+          return updated
+        })
+
+        setMasterCountries(prev => {
+          const updated = new Set(prev)
+          currentCountries.forEach(country => updated.add(country))
+          return updated
+        })
+
+        setMasterLineTypes(prev => {
+          const updated = new Set(prev)
+          currentLineTypes.forEach(lineType => updated.add(lineType))
+          return updated
+        })
+
+        // Update available filter options (sorted for UI)
+        setAvailableCarriers(Array.from(masterCarriers).sort())
+        setAvailableCountries(Array.from(masterCountries).sort())
+        setAvailableLineTypes(Array.from(masterLineTypes).sort())
         
         // Notify parent component of available filter options
         onFilterOptionsUpdate?.({
-          carriers,
-          countries,
-          lineTypes
+          carriers: Array.from(masterCarriers).sort(),
+          countries: Array.from(masterCountries).sort(),
+          lineTypes: Array.from(masterLineTypes).sort()
         })
       }
     } catch (error) {
@@ -238,6 +272,15 @@ export const NumberList: React.FC<NumberListProps> = ({
         onSuccess?.(`Successfully deleted ${numberIds.length} phone numbers`)
         setSelectedNumbers(new Set())
         setShowDeleteModal(false)
+
+        // Reset master filter options since deleted numbers might have affected available options
+        setMasterCarriers(new Set())
+        setMasterCountries(new Set())
+        setMasterLineTypes(new Set())
+
+        // Notify parent to refresh project data (statistics)
+        onProjectRefresh?.()
+
         loadNumbers() // Reload the list
       }
     } catch (error) {
@@ -304,6 +347,10 @@ export const NumberList: React.FC<NumberListProps> = ({
     setCountryFilter('')
     setLineTypeFilter('')
     setCurrentPage(1)
+    // Reset master filter options when filters are cleared
+    setMasterCarriers(new Set())
+    setMasterCountries(new Set())
+    setMasterLineTypes(new Set())
   }
 
   const columns: TableColumn[] = [

@@ -158,8 +158,16 @@ export function NumberListPage() {
       if (response.success) {
         setSuccessMessage(`Successfully deleted all ${project.phone_stats?.total || 0} phone numbers`)
         setShowDeleteAllModal(false)
+
         // Reload project data to update stats
-        window.location.reload()
+        const projectResponse = await projectService.getProject(project.id)
+        if (projectResponse.success) {
+          setProject(projectResponse.data)
+        }
+
+        // Force reload of the NumberList component by updating a key prop or state
+        // This will trigger the NumberList to reload its data
+        setFilters(prev => ({ ...prev, _reload: Date.now() }))
       } else {
         handleError(response.message || 'Failed to delete all numbers')
       }
@@ -179,6 +187,31 @@ export function NumberListPage() {
     setAvailableCarriers(options.carriers)
     setAvailableCountries(options.countries)
     setAvailableLineTypes(options.lineTypes)
+
+    // Check if current filters are still valid with the updated options
+    const updatedFilters = { ...filters }
+
+    // Remove carrier filter if it's no longer available
+    if (filters.carrier && !options.carriers.includes(filters.carrier)) {
+      updatedFilters.carrier = undefined
+    }
+
+    // Remove country filter if it's no longer available
+    if (filters.country && !options.countries.includes(filters.country)) {
+      updatedFilters.country = undefined
+    }
+
+    // Remove lineType filter if it's no longer available
+    if (filters.lineType && !options.lineTypes.includes(filters.lineType)) {
+      updatedFilters.lineType = undefined
+    }
+
+    // Update filters if any were removed
+    if (updatedFilters.carrier !== filters.carrier ||
+        updatedFilters.country !== filters.country ||
+        updatedFilters.lineType !== filters.lineType) {
+      setFilters(updatedFilters)
+    }
   }
 
   if (isLoading) {
@@ -456,6 +489,13 @@ export function NumberListPage() {
           onSuccess={handleSuccess}
           onFilterOptionsUpdate={handleFilterOptionsUpdate}
           onInternalFiltersChange={handleInternalFiltersChange}
+          onProjectRefresh={async () => {
+            // Reload project data to update statistics after deletion
+            const projectResponse = await projectService.getProject(project.id)
+            if (projectResponse.success) {
+              setProject(projectResponse.data)
+            }
+          }}
         />
 
         {/* Export Dialog */}

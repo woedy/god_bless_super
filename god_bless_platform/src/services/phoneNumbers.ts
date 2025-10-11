@@ -598,11 +598,27 @@ class PhoneNumberServiceClass {
    */
   async bulkDeleteNumbers(phoneNumberIds: string[]): Promise<ApiResponse<BulkOperationResponse>> {
     console.log('PhoneNumberService - Bulk deleting numbers:', phoneNumberIds)
-    
-    const response = await apiClient.post<BulkOperationResponse>('/phone-generator/delete-numbers/', {
-      phone_number_ids: phoneNumberIds
+
+    // Get user ID from localStorage
+    const userData = localStorage.getItem('god_bless_user_data')
+    let userId = ''
+    if (userData) {
+      try {
+        const user = JSON.parse(userData)
+        userId = user.user_id || user.id
+      } catch (error) {
+        console.error('Failed to parse user data:', error)
+      }
+    }
+
+    // Build URL with user_id as query parameter
+    const params = new URLSearchParams({ user_id: userId })
+    const url = `/phone-generator/delete-numbers/?${params.toString()}`
+
+    const response = await apiClient.post<BulkOperationResponse>(url, {
+      selectedNumbers: phoneNumberIds
     })
-    
+
     console.log('PhoneNumberService - Bulk delete response:', response)
     return response
   }
