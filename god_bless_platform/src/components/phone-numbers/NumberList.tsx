@@ -6,7 +6,15 @@
 import React, { useState, useEffect, useCallback } from 'react'
 import { Button, Input, Select, Card, Badge, Checkbox, Modal, Table, Pagination } from '../common'
 import { phoneNumberService } from '../../services'
+import { ExportDialog } from './ExportDialog'
 import type { PhoneNumber, NumberFilters, Project } from '../../types'
+
+interface TableColumn {
+  key: string
+  label: string
+  sortable?: boolean
+  render?: (value: unknown, row: PhoneNumber) => React.ReactNode
+}
 
 interface NumberListProps {
   project: Project
@@ -18,13 +26,7 @@ interface NumberListProps {
     countries: string[]
     lineTypes: string[]
   }) => void
-}
-
-interface TableColumn {
-  key: string
-  label: string
-  sortable?: boolean
-  render?: (value: unknown, row: PhoneNumber) => React.ReactNode
+  onInternalFiltersChange?: (filters: NumberFilters) => void
 }
 
 export const NumberList: React.FC<NumberListProps> = ({
@@ -32,7 +34,8 @@ export const NumberList: React.FC<NumberListProps> = ({
   filters: externalFilters,
   onError,
   onSuccess,
-  onFilterOptionsUpdate
+  onFilterOptionsUpdate,
+  onInternalFiltersChange
 }) => {
   // Data state
   const [numbers, setNumbers] = useState<PhoneNumber[]>([])
@@ -52,6 +55,47 @@ export const NumberList: React.FC<NumberListProps> = ({
   const [lineTypeFilter, setLineTypeFilter] = useState<string>('')
   const [sortBy, setSortBy] = useState<string>('-createdAt')
 
+  // Communicate internal filters back to parent (debounced to avoid excessive calls)
+  const updateInternalFilters = useCallback(() => {
+    const internalFilters: NumberFilters = {
+      projectId: project.id,
+      page: currentPage,
+      pageSize,
+      ordering: sortBy
+    }
+
+    if (searchQuery.trim()) {
+      internalFilters.search = searchQuery.trim()
+    }
+
+    if (validationFilter !== 'all') {
+      internalFilters.isValid = validationFilter === 'valid'
+    }
+
+    if (carrierFilter) {
+      internalFilters.carrier = carrierFilter
+    }
+
+    if (countryFilter) {
+      internalFilters.country = countryFilter
+    }
+
+    if (lineTypeFilter) {
+      internalFilters.lineType = lineTypeFilter
+    }
+
+    onInternalFiltersChange?.(internalFilters)
+  }, [project.id, currentPage, pageSize, sortBy, searchQuery, validationFilter, carrierFilter, countryFilter, lineTypeFilter, onInternalFiltersChange])
+
+  // Debounced effect to update parent filters (prevents excessive API calls)
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      updateInternalFilters()
+    }, 150) // 150ms debounce
+
+    return () => clearTimeout(timeoutId)
+  }, [updateInternalFilters])
+
   // Selection state
   const [selectedNumbers, setSelectedNumbers] = useState<Set<string>>(new Set())
   const [selectAll, setSelectAll] = useState<boolean>(false)
@@ -59,15 +103,20 @@ export const NumberList: React.FC<NumberListProps> = ({
   // UI state
   const [showDeleteModal, setShowDeleteModal] = useState<boolean>(false)
   const [isDeleting, setIsDeleting] = useState<boolean>(false)
+  const [showExportModal, setShowExportModal] = useState<boolean>(false)
 
   // Available filter options
   const [availableCarriers, setAvailableCarriers] = useState<string[]>([])
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
   const [availableLineTypes, setAvailableLineTypes] = useState<string[]>([])
 
-  // Load numbers when filters or pagination change
+  // Load numbers when filters or pagination change (debounced to prevent excessive API calls)
   useEffect(() => {
-    loadNumbers()
+    const timeoutId = setTimeout(() => {
+      loadNumbers()
+    }, 100) // 100ms debounce for API calls
+
+    return () => clearTimeout(timeoutId)
   }, [currentPage, pageSize, searchQuery, validationFilter, carrierFilter, countryFilter, lineTypeFilter, sortBy, project.id, externalFilters])
 
   // Update select all state when selection changes
@@ -237,6 +286,10 @@ export const NumberList: React.FC<NumberListProps> = ({
       console.error('Quick export failed:', error)
       onError?.(error instanceof Error ? error.message : 'Failed to export phone numbers')
     }
+  }
+
+  const handleExportFiltered = () => {
+    setShowExportModal(true)
   }
 
   const handleSort = (column: string) => {
@@ -450,6 +503,13 @@ export const NumberList: React.FC<NumberListProps> = ({
                 Export Selected
               </Button>
               <Button
+                variant="outline"
+                size="sm"
+                onClick={handleExportFiltered}
+              >
+                Export Filtered
+              </Button>
+              <Button
                 variant="danger"
                 size="sm"
                 onClick={() => setShowDeleteModal(true)}
@@ -535,6 +595,19 @@ export const NumberList: React.FC<NumberListProps> = ({
           </div>
         </div>
       </Modal>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        project={project}
+        filters={externalFilters}
+        onSuccess={(message) => {
+          onSuccess?.(message)
+          setShowExportModal(false)
+        }}
+        onError={onError}
+      />
     </div>
   )
 }

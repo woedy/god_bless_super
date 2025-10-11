@@ -3,7 +3,7 @@
  * Phone number list with filtering and export functionality
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { NumberList, FilterPanel, ExportDialog } from '../../components/phone-numbers'
@@ -123,6 +123,22 @@ export function NumberListPage() {
     setSuccessMessage(message)
     setError(null)
   }
+
+  const handleInternalFiltersChange = useCallback((internalFilters: NumberFilters) => {
+    console.log('🔍 NumberListPage - Internal filters changed:', internalFilters)
+    setFilters(prev => {
+      // Only update if filters actually changed to prevent unnecessary re-renders
+      const hasChanged = Object.keys(internalFilters).some(key => {
+        const filterKey = key as keyof NumberFilters
+        return prev[filterKey] !== internalFilters[filterKey]
+      })
+
+      if (hasChanged) {
+        return { ...prev, ...internalFilters }
+      }
+      return prev
+    })
+  }, [])
 
   const clearMessages = () => {
     setError(null)
@@ -410,6 +426,7 @@ export function NumberListPage() {
           onError={handleError}
           onSuccess={handleSuccess}
           onFilterOptionsUpdate={handleFilterOptionsUpdate}
+          onInternalFiltersChange={handleInternalFiltersChange}
         />
 
         {/* Export Dialog */}
