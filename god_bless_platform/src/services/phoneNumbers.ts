@@ -184,10 +184,9 @@ class PhoneNumberServiceClass {
       
       const backendResponse = response.data
       
-      console.log('PhoneNumberService - Response status:', response.status)
+      console.log('PhoneNumberService - Response received')
       console.log('PhoneNumberService - Response message:', backendResponse.message)
       console.log('PhoneNumberService - Response data:', backendResponse.data)
-      console.log('PhoneNumberService - Full response object:', response)
       
       // Check if the response indicates successful validation
       const isValidationMessage = backendResponse.message && (
@@ -220,7 +219,7 @@ class PhoneNumberServiceClass {
             canRetry: true,
             result: {
               success: true,
-              message: backendResponse.data?.message || backendResponse.message || 'Validation task started',
+              message: backendResponse.message || 'Validation task started',
               statistics: {
                 totalItems: backendResponse.data?.phone_count || 
                            backendResponse.data?.total_processed || 
@@ -243,7 +242,6 @@ class PhoneNumberServiceClass {
         return transformedResponse
       } else {
         console.error('PhoneNumberService - Validation failed:')
-        console.error('  - Status:', response.status)
         console.error('  - Message:', backendResponse.message)
         console.error('  - Full response:', backendResponse)
         
@@ -563,6 +561,35 @@ class PhoneNumberServiceClass {
     const response = await apiClient.delete<void>(`/phone-generator/list-numbers/${id}/`)
     
     console.log('PhoneNumberService - Delete response:', response)
+    return response
+  }
+
+  /**
+   * Delete all phone numbers for a project
+   */
+  async deleteAllNumbers(projectId: string): Promise<ApiResponse<BulkOperationResponse>> {
+    console.log('PhoneNumberService - Deleting all numbers for project:', projectId)
+
+    // Get user ID from localStorage
+    const userData = localStorage.getItem('god_bless_user_data')
+    let userId = ''
+    if (userData) {
+      try {
+        const user = JSON.parse(userData)
+        userId = user.user_id || user.id
+      } catch (error) {
+        console.error('Failed to parse user data:', error)
+      }
+    }
+
+    const params = {
+      user_id: userId,
+      project_id: projectId
+    }
+
+    const response = await apiClient.get<BulkOperationResponse>(API_ENDPOINTS.PHONE_NUMBERS.DELETE_ALL, params)
+
+    console.log('PhoneNumberService - Delete all response:', response)
     return response
   }
 
