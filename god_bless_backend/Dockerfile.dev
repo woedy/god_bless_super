@@ -1,0 +1,50 @@
+FROM python:3.11-slim
+
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    redis-tools \
+    gcc \
+    libpq-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libffi-dev \
+    curl \
+    wget \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Create non-root user
+RUN groupadd -r -g 1000 appgroup && \
+    useradd -r -u 1000 -g appgroup -m -d /app -s /bin/bash appuser
+
+# Create application directories
+RUN mkdir -p /god_bless_django /god_bless_django/static_cdn /god_bless_django/media /god_bless_django/logs && \
+    chown -R appuser:appgroup /god_bless_django
+
+WORKDIR /god_bless_django
+
+# Copy requirements first for better caching
+COPY requirements.txt requirements-test.txt ./
+RUN pip install --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r requirements-test.txt
+
+# Copy application code
+COPY --chown=appuser:appgroup . .
+
+# Make entrypoint scripts executable
+RUN chmod +x /god_bless_django/docker-entrypoint.sh \
+    && chmod +x /god_bless_django/docker-entrypoint-sqlite.sh
+
+# Set the entrypoint
+ENTRYPOINT ["/bin/sh", "-c"]
+
+# Default command (will be overridden by docker-compose)
+CMD ["python manage.py migrate --noinput && python manage.py collectstatic --noinput --clear && daphne -b 0.0.0.0 -p 6161 god_bless_pro.asgi:application"]

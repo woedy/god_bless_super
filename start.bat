@@ -17,7 +17,7 @@ if not exist "docker-compose.yml" (
 
 REM Start services with development profile
 echo Starting Docker containers...
-docker-compose --env-file .env.local --profile development up -d
+docker-compose --env-file .env.development --profile development up -d
 
 if %errorlevel% equ 0 (
     echo.

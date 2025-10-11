@@ -32,22 +32,20 @@ services:
   backend:
     build:
       context: .
+      dockerfile: Dockerfile.dev
     ports:
       - "${PORT:-6161}:6161"
-    command:
-      [
-        "/bin/bash",
-        "-c",
-        "./docker-entrypoint-sqlite.sh daphne -b 0.0.0.0 -p 6161 god_bless_pro.asgi:application",
-      ]
+    env_file:
+      - .env.development
+    volumes:
+      - .:/god_bless_django
+      - /god_bless_django/static_cdn
+      - /god_bless_django/media
     environment:
       - DOCKER_ENV=true
-      - SECRET_KEY=${SECRET_KEY:-django-insecure-development-key-change-in-production-12345678901234567890}
-      - DEBUG=${DEBUG:-True}
-      - USE_POSTGRES=${USE_POSTGRES:-false}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=${REDIS_PASSWORD:-development-redis-password-123}
+      - PYTHONUNBUFFERED=1
       - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD:-development-redis-password-123}@redis:6379/0
       - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD:-development-redis-password-123}@redis:6379/0
       - POSTGRES_DB=${POSTGRES_DB:-god_bless_postgres}
@@ -68,15 +66,6 @@ services:
       redis:
         condition: service_healthy
     restart: unless-stopped
-    volumes:
-      # Development: mount source code for hot reload
-      - ${MOUNT_SOURCE:-.}:/god_bless_django
-      # Mount SQLite database file specifically
-      - ./db.sqlite3:/god_bless_django/db.sqlite3
-      # Production: use named volumes for static/media files
-      - static_files:/god_bless_django/static_cdn
-      - media_files:/god_bless_django/media
-
   # React Frontend Application (Development only)
   frontend:
     build:
