@@ -8,36 +8,68 @@ from django.conf import settings
 
 def configure_smtp_logging():
     """Configure logging for SMTP rotation service in Docker environment"""
-    
-    # Create logs directory if it doesn't exist
-    log_dir = '/app/logs' if os.path.exists('/app/logs') else 'logs'
-    os.makedirs(log_dir, exist_ok=True)
-    
-    # Configure SMTP rotation logger
-    smtp_logger = logging.getLogger('smtps.rotation_service')
-    smtp_logger.setLevel(logging.INFO)
-    
-    # File handler for SMTP logs
-    smtp_handler = logging.FileHandler(os.path.join(log_dir, 'smtp_rotation.log'))
-    smtp_handler.setLevel(logging.INFO)
-    
-    # Console handler for Docker logs
-    console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
-    
-    # Formatter
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-    smtp_handler.setFormatter(formatter)
-    console_handler.setFormatter(formatter)
-    
-    # Add handlers if not already added
-    if not smtp_logger.handlers:
-        smtp_logger.addHandler(smtp_handler)
-        smtp_logger.addHandler(console_handler)
-    
-    return smtp_logger
+
+    # Use the correct logs directory path for Docker
+    log_dir = '/god_bless_django/logs'
+
+    # Ensure logs directory exists and is writable
+    try:
+        os.makedirs(log_dir, exist_ok=True)
+
+        # Test if we can write to the logs directory
+        test_file = os.path.join(log_dir, 'test_smtp.log')
+        with open(test_file, 'w') as f:
+            f.write('test')
+
+        # If successful, configure file logging
+        smtp_logger = logging.getLogger('smtps.rotation_service')
+        smtp_logger.setLevel(logging.INFO)
+
+        # File handler for SMTP logs
+        smtp_handler = logging.FileHandler(os.path.join(log_dir, 'smtp_rotation.log'))
+        smtp_handler.setLevel(logging.INFO)
+
+        # Console handler for Docker logs
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        smtp_handler.setFormatter(formatter)
+        console_handler.setFormatter(formatter)
+
+        # Add handlers if not already added
+        if not smtp_logger.handlers:
+            smtp_logger.addHandler(smtp_handler)
+            smtp_logger.addHandler(console_handler)
+
+        # Clean up test file
+        os.remove(test_file)
+
+        return smtp_logger
+
+    except (OSError, PermissionError):
+        # If file logging fails, use console-only logging
+        smtp_logger = logging.getLogger('smtps.rotation_service')
+        smtp_logger.setLevel(logging.INFO)
+
+        # Console handler only (for Docker logs)
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(logging.INFO)
+
+        # Formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        console_handler.setFormatter(formatter)
+
+        # Add handler if not already added
+        if not smtp_logger.handlers:
+            smtp_logger.addHandler(console_handler)
+
+        return smtp_logger
 
 
 def get_smtp_health_check_settings():
@@ -56,7 +88,7 @@ def get_redis_cache_settings():
     redis_host = os.getenv('REDIS_HOST', 'localhost')
     redis_port = int(os.getenv('REDIS_PORT', 6379))
     redis_password = os.getenv('REDIS_PASSWORD', '')
-    
+
     return {
         'host': redis_host,
         'port': redis_port,

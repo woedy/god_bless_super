@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  # Redis Cache & Message Broker (needed for sessions and background tasks)
+  redis:
+    image: redis:alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD:-development-redis-password-123}
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # Django Backend Application
+  backend:
+    build:
+      context: .
+    ports:
+      - "${PORT:-6161}:6161"
+    command: ["python", "manage.py", "runserver", "0.0.0.0:6161"]
+    environment:
+      - DOCKER_ENV=true
+      - SECRET_KEY=${SECRET_KEY:-django-insecure-development-key-change-in-production-12345678901234567890}
+      - DEBUG=${DEBUG:-True}
+      - USE_POSTGRES=${USE_POSTGRES:-false}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-development-redis-password-123}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:3000}
+      - CREATE_SUPERUSER=${CREATE_SUPERUSER:-false}
+      - LOAD_INITIAL_DATA=${LOAD_INITIAL_DATA:-false}
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      # Mount source code for development (hot reload)
+      - .:/god_bless_django
+      # Mount SQLite database file
+      - ./db.sqlite3:/god_bless_django/db.sqlite3
+      # Mount static and media files
+      - static_files:/god_bless_django/static_cdn
+      - media_files:/god_bless_django/media
+    env_file:
+      - .env.sqlite
+
+  # React Frontend Application (Development only)
+  frontend:
+    build:
+      context: ${FRONTEND_CONTEXT:-../god_bless_platform}
+      dockerfile: ${FRONTEND_DOCKERFILE:-Dockerfile.dev}
+    ports:
+      - "${FRONTEND_PORT:-5173}:5173"
+    volumes:
+      - ${FRONTEND_CONTEXT:-../god_bless_platform}:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:6161/api}
+      - VITE_WS_URL=${VITE_WS_URL:-ws://localhost:6161/ws/}
+      - VITE_APP_NAME=${VITE_APP_NAME:-God Bless Platform}
+      - VITE_VERSION=${VITE_VERSION:-1.0.0}
+      - VITE_ENVIRONMENT=${VITE_ENVIRONMENT:-development}
+    depends_on:
+      - backend
+    restart: unless-stopped
+    profiles:
+      - frontend
+
+volumes:
+  static_files:
+  media_files:
+  redis_data:
