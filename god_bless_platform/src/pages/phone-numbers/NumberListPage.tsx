@@ -7,8 +7,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { NumberList, FilterPanel, ExportDialog } from '../../components/phone-numbers'
-import { Card, Button } from '../../components/common'
-import { projectService } from '../../services'
+import { Card, Button, Modal } from '../../components/common'
+import { projectService, phoneNumberService } from '../../services'
 import type { BreadcrumbItem } from '../../types/ui'
 import type { Project, NumberFilters } from '../../types'
 
@@ -48,6 +48,9 @@ export function NumberListPage() {
   })
   const [showFilters, setShowFilters] = useState<boolean>(false)
   const [showExportDialog, setShowExportDialog] = useState<boolean>(false)
+  // Delete all numbers state
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState<boolean>(false)
+  const [isDeletingAll, setIsDeletingAll] = useState<boolean>(false)
   
   // Available filter options (populated from NumberList)
   const [availableCarriers, setAvailableCarriers] = useState<string[]>([])
@@ -145,9 +148,27 @@ export function NumberListPage() {
     setSuccessMessage(null)
   }
 
-  const handleExportSuccess = (message: string) => {
-    setSuccessMessage(message)
-    setShowExportDialog(false)
+  const handleDeleteAllNumbers = async () => {
+    if (!project?.id) return
+
+    try {
+      setIsDeletingAll(true)
+      const response = await phoneNumberService.deleteAllNumbers(project.id)
+
+      if (response.success) {
+        setSuccessMessage(`Successfully deleted all ${project.phone_stats?.total || 0} phone numbers`)
+        setShowDeleteAllModal(false)
+        // Reload project data to update stats
+        window.location.reload()
+      } else {
+        handleError(response.message || 'Failed to delete all numbers')
+      }
+    } catch (error) {
+      console.error('Delete all numbers failed:', error)
+      handleError(error instanceof Error ? error.message : 'Failed to delete all numbers')
+    } finally {
+      setIsDeletingAll(false)
+    }
   }
 
   const handleFilterOptionsUpdate = (options: {
@@ -237,6 +258,14 @@ export function NumberListPage() {
                   Filtered
                 </span>
               )}
+            </Button>
+            <Button
+              variant="danger"
+              size="sm"
+              onClick={() => setShowDeleteAllModal(true)}
+              disabled={!project?.phone_stats?.total || project.phone_stats.total === 0}
+            >
+              Delete All Numbers
             </Button>
             <Button
               onClick={() => navigate(`/phone-numbers/generate?project=${projectId}`)}
@@ -435,9 +464,60 @@ export function NumberListPage() {
           onClose={() => setShowExportDialog(false)}
           project={project}
           filters={filters}
-          onSuccess={handleExportSuccess}
+          onSuccess={(message) => {
+            setSuccessMessage(message)
+            setShowExportDialog(false)
+          }}
           onError={handleError}
         />
+
+        {/* Delete All Confirmation Modal */}
+        <Modal
+          isOpen={showDeleteAllModal}
+          onClose={() => setShowDeleteAllModal(false)}
+          title="Delete All Phone Numbers"
+          size="sm"
+        >
+          <div className="p-6">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <svg className="h-6 w-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Delete All Numbers
+                </h3>
+                <p className="text-sm text-gray-500">
+                  This action cannot be undone.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-gray-700 mb-6">
+              Are you sure you want to delete all {project?.phone_stats?.total?.toLocaleString() || 0} phone numbers in this project?
+              This will permanently remove all phone numbers and their associated data.
+            </p>
+
+            <div className="flex justify-end gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteAllModal(false)}
+                disabled={isDeletingAll}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteAllNumbers}
+                loading={isDeletingAll}
+              >
+                Delete All Numbers
+              </Button>
+            </div>
+          </div>
+        </Modal>
       </div>
     </AppLayout>
   )

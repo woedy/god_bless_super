@@ -45,6 +45,7 @@ export const API_ENDPOINTS = {
     VALIDATE: '/phone-validator/start-validation-free/',
     EXPORT: '/phone-generator/export/',
     IMPORT: '/phone-generator/import/',
+    DELETE_ALL: '/phone-generator/delete-all/',
     STATISTICS: '/phone-generator/statistics/',
     COUNTRIES: '/phone-generator/countries/', // Mock endpoint
     CARRIERS: '/phone-generator/carriers/', // Mock endpoint

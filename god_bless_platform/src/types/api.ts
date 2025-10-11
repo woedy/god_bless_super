@@ -166,7 +166,7 @@ export interface NumberFilters extends PaginationParams {
 export interface ExportParams {
   projectId?: string
   format: 'csv' | 'txt' | 'json' | 'doc'
-  filters?: Omit<NumberFilters, keyof PaginationParams>
+  filters?: Omit<NumberFilters, 'page' | 'pageSize' | 'ordering'>
   includeInvalid?: boolean
   includeMetadata?: boolean
   customFields?: string[]
