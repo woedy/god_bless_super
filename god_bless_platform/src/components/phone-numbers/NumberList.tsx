@@ -13,6 +13,11 @@ interface NumberListProps {
   filters?: NumberFilters
   onError?: (error: string) => void
   onSuccess?: (message: string) => void
+  onFilterOptionsUpdate?: (options: {
+    carriers: string[]
+    countries: string[]
+    lineTypes: string[]
+  }) => void
 }
 
 interface TableColumn {
@@ -26,7 +31,8 @@ export const NumberList: React.FC<NumberListProps> = ({
   project,
   filters: externalFilters,
   onError,
-  onSuccess
+  onSuccess,
+  onFilterOptionsUpdate
 }) => {
   // Data state
   const [numbers, setNumbers] = useState<PhoneNumber[]>([])
@@ -136,6 +142,13 @@ export const NumberList: React.FC<NumberListProps> = ({
         setAvailableCarriers(carriers)
         setAvailableCountries(countries)
         setAvailableLineTypes(lineTypes)
+        
+        // Notify parent component of available filter options
+        onFilterOptionsUpdate?.({
+          carriers,
+          countries,
+          lineTypes
+        })
       }
     } catch (error) {
       console.error('Failed to load numbers:', error)
