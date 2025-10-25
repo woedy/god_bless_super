@@ -61,6 +61,8 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
         
         # Generate unique phone numbers in batches
         generated_numbers = set()
+        generated_phone_ids = []
+        generated_phone_id_set = set()
         total_generated = 0
         batch_count = 0
         failed_attempts = 0
@@ -120,25 +122,62 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
                 # Bulk create in smaller chunks to avoid memory issues
                 chunk_size = 500
                 created_count = 0
+                chunk_generated_ids = []
                 for i in range(0, len(phone_objects), chunk_size):
                     chunk = phone_objects[i:i + chunk_size]
                     try:
                         PhoneNumber.objects.bulk_create(chunk, ignore_conflicts=True)
-                        created_count += len(chunk)
+
+                        chunk_numbers = [obj.phone_number for obj in chunk]
+                        inserted_ids = list(
+                            PhoneNumber.objects.filter(
+                                phone_number__in=chunk_numbers,
+                                user=user,
+                                project=project
+                            ).values_list('id', flat=True)
+                        )
+
+                        new_ids = [pk for pk in inserted_ids if pk not in generated_phone_id_set]
+                        if new_ids:
+                            chunk_generated_ids.extend(new_ids)
+                            generated_phone_id_set.update(new_ids)
+
+                        created_count += len(new_ids)
                     except Exception as e:
                         logger.error(f"Error creating phone number chunk: {e}")
                         continue
-                
+
+                if created_count == 0:
+                    failed_attempts += 1
+                    logger.warning(
+                        "No new phone numbers persisted for batch %s. Attempt %s/%s",
+                        batch_count,
+                        failed_attempts,
+                        max_failed_attempts
+                    )
+                    continue
+
                 total_generated += created_count
+                generated_phone_ids.extend(chunk_generated_ids)
                 generated_numbers.update(unique_batch)
-                
+
+                progress_percent = int((total_generated / quantity) * 100) if quantity else 100
+
                 # Update generation task
                 generation_task.processed_items = total_generated
                 generation_task.successful_items = total_generated
                 generation_task.progress = progress_percent
                 generation_task.current_step = current_step
                 generation_task.save(update_fields=['processed_items', 'successful_items', 'progress', 'current_step'])
-                
+
+                # Emit a progress update that reflects the persisted total
+                self.update_progress(
+                    progress=progress_percent,
+                    current_step=current_step,
+                    processed_items=total_generated,
+                    total_items=quantity
+                )
+
                 # Reset failed attempts on successful batch
                 failed_attempts = 0
                 
@@ -150,6 +189,9 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
         # Mark task as completed
         generation_task.status = 'completed'
         generation_task.completed_at = timezone.now()
+        generation_task.progress = 100
+        generation_task.processed_items = total_generated
+        generation_task.successful_items = total_generated
         generation_task.result_data = {
             'total_generated': total_generated,
             'area_code': area_code,
@@ -179,7 +221,7 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
         # Auto-validate generated numbers if requested
         if auto_validate and total_generated > 0:
             logger.info(f"Starting auto-validation for {total_generated} generated numbers")
-            
+
             # Update progress to show validation starting
             self.update_progress(
                 progress=100,
@@ -187,17 +229,7 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
                 processed_items=total_generated,
                 total_items=quantity
             )
-            
-            # Get the generated phone numbers for this task
-            generated_phone_ids = list(
-                PhoneNumber.objects.filter(
-                    user=user,
-                    project=project,
-                    area_code=area_code,
-                    created_at__gte=generation_task.created_at
-                ).values_list('id', flat=True)[:total_generated]
-            )
-            
+
             if generated_phone_ids:
                 # Start validation task for the generated numbers
                 from phone_generator.tasks import validate_phone_numbers_task
@@ -206,11 +238,12 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
                     phone_ids=generated_phone_ids,
                     batch_size=500
                 )
-                
+
                 logger.info(f"Auto-validation task started: {validation_task.id}")
-                
+
                 # Update result data to include validation task info
                 generation_task.result_data['auto_validation_task_id'] = validation_task.id
+                generation_task.result_data['auto_validation_target_count'] = len(generated_phone_ids)
                 generation_task.save()
         
         return {
