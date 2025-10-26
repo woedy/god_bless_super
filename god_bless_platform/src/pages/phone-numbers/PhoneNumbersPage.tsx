@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { Button, Card, Select, Badge } from '../../components/common'
 import { projectService, phoneNumberService } from '../../services'
+import { useProject } from '../../contexts'
 import type { BreadcrumbItem } from '../../types/ui'
 import type { Project, PhoneNumber } from '../../types'
 
@@ -79,11 +80,19 @@ export function PhoneNumbersPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirected = searchParams.get('redirected')
-  
+  const requestedProjectId = searchParams.get('project')
+
+  const {
+    currentProjectId,
+    currentProject,
+    selectProject,
+    isReady: isProjectReady,
+    isLoading: isProjectLoading
+  } = useProject()
+
   // State
   const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState<string>('')
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [isLoadingProjects, setIsLoadingProjects] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [showRedirectMessage, setShowRedirectMessage] = useState<boolean>(false)
   const [recentNumbers, setRecentNumbers] = useState<PhoneNumber[]>([])
@@ -101,24 +110,32 @@ export function PhoneNumbersPage() {
     }
   }, [redirected, searchParams, navigate])
 
+  useEffect(() => {
+    if (!isProjectReady) {
+      return
+    }
+
+    if (requestedProjectId) {
+      if (requestedProjectId !== currentProjectId) {
+        void selectProject(requestedProjectId)
+      }
+      return
+    }
+
+    if (!currentProjectId && projects.length > 0) {
+      void selectProject(projects[0])
+    }
+  }, [isProjectReady, requestedProjectId, currentProjectId, projects, selectProject])
+
   // Load projects
   useEffect(() => {
     const loadProjects = async () => {
       try {
-        setIsLoading(true)
+        setIsLoadingProjects(true)
         const response = await projectService.getProjects()
-        
+
         if (response.success) {
           setProjects(response.data.results)
-          
-          // Try to restore last selected project from localStorage
-          const lastSelectedProject = localStorage.getItem('lastSelectedProject')
-          if (lastSelectedProject && response.data.results.find(p => p.id === lastSelectedProject)) {
-            setSelectedProject(lastSelectedProject)
-          } else if (response.data.results.length > 0) {
-            // Auto-select first project if no saved project or saved project not found
-            setSelectedProject(response.data.results[0].id)
-          }
         } else {
           setError('Failed to load projects')
         }
@@ -126,7 +143,7 @@ export function PhoneNumbersPage() {
         console.error('Failed to load projects:', err)
         setError('Failed to load projects')
       } finally {
-        setIsLoading(false)
+        setIsLoadingProjects(false)
       }
     }
 
@@ -163,15 +180,15 @@ export function PhoneNumbersPage() {
 
   // Load recent numbers when project changes
   useEffect(() => {
-    if (selectedProject) {
-      loadRecentNumbers(selectedProject)
+    if (currentProjectId) {
+      loadRecentNumbers(currentProjectId)
     } else {
       setRecentNumbers([])
     }
-  }, [selectedProject])
+  }, [currentProjectId])
 
   const handleActionClick = (action: string) => {
-    if (!selectedProject) {
+    if (!currentProjectId) {
       setError('Please select a project first')
       return
     }
@@ -182,17 +199,21 @@ export function PhoneNumbersPage() {
 
     switch (action) {
       case 'generate':
-        navigate(`/phone-numbers/generate?project=${selectedProject}`)
+        navigate('/phone-numbers/generate')
         break
       case 'validate':
-        navigate(`/phone-numbers/validate?project=${selectedProject}`)
+        navigate('/phone-numbers/validate')
         break
       case 'list':
-        navigate(`/phone-numbers/list?project=${selectedProject}`)
+        navigate('/phone-numbers/list')
         break
       default:
         break
     }
+  }
+
+  const handleProjectChange = (projectId: string) => {
+    void selectProject(projectId)
   }
 
   const projectOptions = projects.map(project => ({
@@ -200,19 +221,15 @@ export function PhoneNumbersPage() {
     label: project.project_name
   }))
 
-  const selectedProjectData = projects.find(p => p.id === selectedProject)
+  const selectedProjectData = currentProject ?? projects.find(p => p.id === currentProjectId) ?? null
 
   // Clear error when project is selected and save to localStorage
   useEffect(() => {
-    if (selectedProject) {
-      if (error || showRedirectMessage) {
-        setError(null)
-        setShowRedirectMessage(false)
-      }
-      // Save selected project to localStorage
-      localStorage.setItem('lastSelectedProject', selectedProject)
+    if (currentProjectId && (error || showRedirectMessage)) {
+      setError(null)
+      setShowRedirectMessage(false)
     }
-  }, [selectedProject, error, showRedirectMessage])
+  }, [currentProjectId, error, showRedirectMessage])
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -226,16 +243,16 @@ export function PhoneNumbersPage() {
             </p>
           </div>
           <div className="flex space-x-3">
-            <Button 
+            <Button
               variant="outline"
               onClick={() => handleActionClick('list')}
-              disabled={!selectedProject}
+              disabled={!currentProjectId}
             >
               View Numbers
             </Button>
-            <Button 
+            <Button
               onClick={() => handleActionClick('generate')}
-              disabled={!selectedProject}
+              disabled={!currentProjectId}
             >
               Generate Numbers
             </Button>
@@ -281,7 +298,7 @@ export function PhoneNumbersPage() {
             </Button>
           </div>
           
-          {isLoading ? (
+          {isLoadingProjects ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </div>
@@ -297,8 +314,8 @@ export function PhoneNumbersPage() {
               <div>
                 <Select
                   label="Choose Project"
-                  value={selectedProject}
-                  onChange={setSelectedProject}
+                  value={currentProjectId ?? ''}
+                  onChange={handleProjectChange}
                   options={projectOptions}
                   placeholder="Select a project"
                   required
@@ -374,34 +391,32 @@ export function PhoneNumbersPage() {
         </div>
 
         {/* Recent Numbers */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Numbers (Last 20)</h2>
-              <Button 
-                variant="ghost" 
-                size="sm"
-                onClick={() => handleActionClick('list')}
-                disabled={!selectedProject}
-              >
-                View All
-              </Button>
-            </div>
+        <div className="theme-card rounded-2xl">
+          <div className="p-6 theme-card-header flex items-center justify-between">
+            <h2 className="text-lg font-semibold theme-text-primary">Recent Numbers (Last 20)</h2>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => handleActionClick('list')}
+              disabled={!currentProjectId}
+            >
+              View All
+            </Button>
           </div>
           <div className="overflow-x-auto">
             {isLoadingNumbers ? (
               <div className="flex items-center justify-center py-8">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                <span className="ml-2 text-gray-500">Loading recent numbers...</span>
+                <div className="h-6 w-6 animate-spin rounded-full border-2 border-current border-t-transparent"></div>
+                <span className="ml-2 text-sm theme-text-muted">Loading recent numbers...</span>
               </div>
-            ) : !selectedProject ? (
+            ) : !currentProjectId ? (
               <div className="text-center py-8">
-                <p className="text-gray-500">Select a project to view recent numbers</p>
+                <p className="theme-text-muted">Select a project to view recent numbers</p>
               </div>
             ) : recentNumbers.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-gray-500 mb-4">No phone numbers found for this project</p>
-                <Button 
+                <p className="theme-text-muted mb-4">No phone numbers found for this project</p>
+                <Button
                   onClick={() => handleActionClick('generate')}
                   size="sm"
                 >
@@ -409,39 +424,39 @@ export function PhoneNumbersPage() {
                 </Button>
               </div>
             ) : (
-              <table className="w-full">
-                <thead className="bg-gray-50">
+              <table className="theme-table">
+                <thead>
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Phone Number
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Carrier
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Line Type
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Country
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Created
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {recentNumbers.map((number: any) => (
-                    <tr key={number.id} className="hover:bg-gray-50">
+                    <tr key={number.id} className="theme-table-row">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
+                          <div className="text-sm font-medium theme-text-primary">
                             {formatPhoneNumber(number.number || number.formattedNumber || '')}
                           </div>
                           {(number.metadata?.areaCode || number.areaCode) && (
-                            <div className="text-xs text-gray-500">
+                            <div className="text-xs theme-text-muted">
                               Area: {number.metadata?.areaCode || number.areaCode}
                             </div>
                           )}
@@ -451,10 +466,10 @@ export function PhoneNumbersPage() {
                         <div>
                           <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             number.isValid === true
-                              ? 'bg-green-100 text-green-800'
+                              ? 'bg-emerald-500/10 text-emerald-500'
                               : number.isValid === false
-                              ? 'bg-red-100 text-red-800'
-                              : 'bg-yellow-100 text-yellow-800'
+                              ? 'bg-rose-500/10 text-rose-500'
+                              : 'bg-amber-500/10 text-amber-500'
                           }`}>
                             {number.isValid === true
                               ? 'Valid'
@@ -463,36 +478,36 @@ export function PhoneNumbersPage() {
                               : 'Pending'}
                           </span>
                           {number.validatedAt && (
-                            <div className="text-xs text-gray-500 mt-1">
+                            <div className="text-xs theme-text-muted mt-1">
                               Validated: {new Date(number.validatedAt).toLocaleDateString()}
                             </div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-primary">
                         {number.carrier || '-'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {number.lineType ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium theme-chip">
                             {number.lineType.charAt(0).toUpperCase() + number.lineType.slice(1)}
                           </span>
                         ) : (
-                          <span className="text-sm text-gray-500">-</span>
+                          <span className="text-sm theme-text-muted">-</span>
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm text-gray-900">
+                          <div className="text-sm theme-text-primary">
                             {number.country || 'Unknown'}
                           </div>
                           {number.countryCode && (
-                            <div className="text-xs text-gray-500">{number.countryCode}</div>
+                            <div className="text-xs theme-text-muted">{number.countryCode}</div>
                           )}
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {number.createdAt 
+                      <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
+                        {number.createdAt
                           ? formatRelativeTime(number.createdAt)
                           : 'Unknown'}
                       </td>

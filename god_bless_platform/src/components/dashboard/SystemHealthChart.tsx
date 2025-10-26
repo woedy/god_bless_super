@@ -95,11 +95,11 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
   const overallConfig = healthStatusConfig[systemHealth.overall]
 
   return (
-    <div className={`system-health-chart bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div className={`system-health-chart theme-card rounded-lg overflow-hidden flex flex-col ${className}`}>
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 theme-card-header">
         <div className="flex items-center justify-between">
-          <h3 className="text-lg font-semibold text-gray-900">System Health</h3>
+          <h3 className="text-lg font-semibold theme-text-primary">System Health</h3>
           <div className={`inline-flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium ${overallConfig.bgColor} ${overallConfig.color}`}>
             {overallConfig.icon}
             <span>{overallConfig.label}</span>
@@ -107,7 +107,7 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
         </div>
 
         {/* Tabs */}
-        <div className="mt-4 flex space-x-1 bg-gray-100 rounded-lg p-1">
+        <div className="mt-4 flex space-x-1 theme-subtle rounded-lg p-1">
           {[
             { key: 'overview', label: 'Overview' },
             { key: 'components', label: 'Components' },
@@ -119,8 +119,8 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
               className={`
                 flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors
                 ${selectedTab === tab.key
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'theme-surface theme-text-primary shadow-sm'
+                  : 'theme-secondary-text theme-hover'
                 }
               `}
             >
@@ -131,21 +131,21 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
       </div>
 
       {/* Content */}
-      <div className="p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {selectedTab === 'overview' && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
+                <div className="text-2xl font-bold theme-text-primary">
                   {Object.values(systemHealth.components).filter(c => c.status === 'healthy').length}
                 </div>
-                <div className="text-sm text-gray-600">Healthy Components</div>
+                <div className="text-sm theme-secondary-text">Healthy Components</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
+                <div className="text-2xl font-bold theme-text-primary">
                   {Math.round((systemHealth.resources.cpu.usage + systemHealth.resources.memory.usage) / 2)}%
                 </div>
-                <div className="text-sm text-gray-600">Avg Resource Usage</div>
+                <div className="text-sm theme-secondary-text">Avg Resource Usage</div>
               </div>
             </div>
 
@@ -155,8 +155,8 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
                   <span>CPU Usage</span>
                   <span>{systemHealth.resources.cpu.usage}%</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
+                <div className="w-full theme-progress-track rounded-full h-2">
+                  <div
                     className={`h-2 rounded-full ${getUsageColor(systemHealth.resources.cpu.usage, systemHealth.resources.cpu.threshold)}`}
                     style={{ width: `${systemHealth.resources.cpu.usage}%` }}
                   ></div>
@@ -168,8 +168,8 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
                   <span>Memory Usage</span>
                   <span>{systemHealth.resources.memory.usage}%</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
+                <div className="w-full theme-progress-track rounded-full h-2">
+                  <div
                     className={`h-2 rounded-full ${getUsageColor(systemHealth.resources.memory.usage, systemHealth.resources.memory.threshold)}`}
                     style={{ width: `${systemHealth.resources.memory.usage}%` }}
                   ></div>
@@ -181,8 +181,8 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
                   <span>Disk Usage</span>
                   <span>{systemHealth.resources.disk.usage}%</span>
                 </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
+                <div className="w-full theme-progress-track rounded-full h-2">
+                  <div
                     className={`h-2 rounded-full ${getUsageColor(systemHealth.resources.disk.usage, systemHealth.resources.disk.threshold)}`}
                     style={{ width: `${systemHealth.resources.disk.usage}%` }}
                   ></div>
@@ -193,21 +193,21 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
         )}
 
         {selectedTab === 'components' && (
-          <div className="space-y-3">
+          <div className="space-y-3 pb-2">
             {Object.entries(systemHealth.components).map(([name, component]) => {
               const config = healthStatusConfig[component.status]
-              
+
               return (
-                <div key={name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <div key={name} className="flex items-center justify-between p-3 theme-subtle rounded-lg">
                   <div className="flex items-center space-x-3">
                     <div className={`p-1 rounded-full ${config.bgColor} ${config.color}`}>
                       {config.icon}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900 capitalize">
+                      <div className="font-medium theme-text-primary capitalize">
                         {name.replace('_', ' ')}
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm theme-secondary-text break-words">
                         {component.message}
                       </div>
                     </div>
@@ -217,7 +217,7 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
                       {config.label}
                     </div>
                     {component.responseTime && (
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs theme-muted-text">
                         {component.responseTime}ms
                       </div>
                     )}
@@ -229,18 +229,18 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
         )}
 
         {selectedTab === 'resources' && (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-2">
             {Object.entries(systemHealth.resources).map(([name, resource]) => {
               const config = healthStatusConfig[resource.status]
               
               return (
-                <div key={name} className="p-3 bg-gray-50 rounded-lg">
+                <div key={name} className="p-3 theme-subtle rounded-lg">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
                       <div className={`p-1 rounded-full ${config.bgColor} ${config.color}`}>
                         {config.icon}
                       </div>
-                      <span className="font-medium text-gray-900 capitalize">
+                      <span className="font-medium theme-text-primary capitalize">
                         {name}
                       </span>
                     </div>
@@ -248,28 +248,28 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
                       {config.label}
                     </span>
                   </div>
-                  
+
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
                       <span>Usage</span>
                       <span>{resource.usage}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
+                    <div className="w-full theme-progress-track rounded-full h-2">
+                      <div
                         className={`h-2 rounded-full ${getUsageColor(resource.usage, resource.threshold)}`}
                         style={{ width: `${resource.usage}%` }}
                       ></div>
                     </div>
-                    
+
                     {name === 'memory' && (
-                      <div className="flex justify-between text-xs text-gray-600">
+                      <div className="flex justify-between text-xs theme-secondary-text">
                         <span>Available: {formatBytes(resource.available)}</span>
                         <span>Warning: {resource.threshold.warning}%</span>
                       </div>
                     )}
-                    
+
                     {name === 'disk' && (
-                      <div className="flex justify-between text-xs text-gray-600">
+                      <div className="flex justify-between text-xs theme-secondary-text">
                         <span>Available: {formatBytes(resource.available)}</span>
                         <span>Critical: {resource.threshold.critical}%</span>
                       </div>

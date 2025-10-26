@@ -153,18 +153,18 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
   }
 
   return (
-    <div className={`task-progress-monitor bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div className={`task-progress-monitor theme-card rounded-lg overflow-hidden flex flex-col ${className}`}>
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 theme-card-header">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Task Monitor</h3>
-          <div className="text-sm text-gray-500">
+          <h3 className="text-lg font-semibold theme-text-primary">Task Monitor</h3>
+          <div className="text-sm theme-muted-text">
             {taskSummary.running} running • {taskSummary.pending} pending
           </div>
         </div>
 
         {/* Tabs */}
-        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+        <div className="flex space-x-1 theme-subtle rounded-lg p-1">
           {[
             { key: 'summary', label: 'Summary' },
             { key: 'active', label: `Active (${activeTasks.length})` },
@@ -176,8 +176,8 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
               className={`
                 flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors
                 ${selectedView === tab.key
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-600 hover:text-gray-900'
+                  ? 'theme-surface theme-text-primary shadow-sm'
+                  : 'theme-secondary-text theme-hover'
                 }
               `}
             >
@@ -188,24 +188,24 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
       </div>
 
       {/* Content */}
-      <div className="p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {selectedView === 'summary' && (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-2">
             {/* Overall Stats */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
-                <div className="text-2xl font-bold text-gray-900">{taskSummary.total}</div>
-                <div className="text-sm text-gray-600">Total Tasks</div>
+              <div className="text-center p-3 theme-subtle rounded-lg">
+                <div className="text-2xl font-bold theme-text-primary">{taskSummary.total}</div>
+                <div className="text-sm theme-secondary-text">Total Tasks</div>
               </div>
-              <div className="text-center p-3 bg-gray-50 rounded-lg">
+              <div className="text-center p-3 theme-subtle rounded-lg">
                 <div className="text-2xl font-bold text-green-600">{Math.round(taskSummary.successRate)}%</div>
-                <div className="text-sm text-gray-600">Success Rate</div>
+                <div className="text-sm theme-secondary-text">Success Rate</div>
               </div>
             </div>
 
             {/* Status Breakdown */}
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-900">Status Breakdown</h4>
+              <h4 className="text-sm font-medium theme-text-primary">Status Breakdown</h4>
               {Object.entries({
                 running: taskSummary.running,
                 pending: taskSummary.pending,
@@ -214,16 +214,16 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
               }).map(([status, count]) => {
                 const config = taskStatusConfig[status as TaskStatus]
                 const percentage = taskSummary.total > 0 ? (count / taskSummary.total) * 100 : 0
-                
+
                 return (
                   <div key={status} className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <div className={`w-3 h-3 rounded-full ${config.bgColor.replace('bg-', 'bg-')}`}></div>
-                      <span className="text-sm text-gray-700 capitalize">{status}</span>
+                      <span className="text-sm theme-secondary-text capitalize">{status}</span>
                     </div>
                     <div className="flex items-center space-x-2">
-                      <span className="text-sm font-medium text-gray-900">{count}</span>
-                      <span className="text-xs text-gray-500">({percentage.toFixed(1)}%)</span>
+                      <span className="text-sm font-medium theme-text-primary">{count}</span>
+                      <span className="text-xs theme-muted-text">({percentage.toFixed(1)}%)</span>
                     </div>
                   </div>
                 )
@@ -232,82 +232,83 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
 
             {/* Task Types */}
             <div className="space-y-2">
-              <h4 className="text-sm font-medium text-gray-900">By Type</h4>
+              <h4 className="text-sm font-medium theme-text-primary">By Type</h4>
               {Object.entries(taskSummary.byType).map(([type, count]) => {
                 const config = taskTypeConfig[type as TaskType]
-                
+
                 return (
                   <div key={type} className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <div className={`p-1 rounded ${config.bgColor} ${config.color}`}>
                         {config.icon}
                       </div>
-                      <span className="text-sm text-gray-700">{config.label}</span>
+                      <span className="text-sm theme-secondary-text">{config.label}</span>
                     </div>
-                    <span className="text-sm font-medium text-gray-900">{count}</span>
+                    <span className="text-sm font-medium theme-text-primary">{count}</span>
                   </div>
                 )
               })}
             </div>
 
             {/* Average Duration */}
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <div className="text-sm text-blue-800">
-                Average Duration: <span className="font-medium">{formatDuration(taskSummary.averageDuration)}</span>
+            <div className="p-3 theme-subtle rounded-lg border border-dashed theme-border">
+              <div className="text-sm theme-secondary-text">
+                Average Duration:{' '}
+                <span className="font-medium theme-text-primary">{formatDuration(taskSummary.averageDuration)}</span>
               </div>
             </div>
           </div>
         )}
 
         {selectedView === 'active' && (
-          <div className="space-y-3">
+          <div className="space-y-3 pb-2">
             {activeTasks.length === 0 ? (
               <div className="text-center py-8">
-                <div className="text-gray-400 mb-2">
+                <div className="theme-muted-text mb-2">
                   <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
                 </div>
-                <p className="text-gray-500">No active tasks</p>
+                <p className="theme-secondary-text">No active tasks</p>
               </div>
             ) : (
               activeTasks.map((task) => {
                 const typeConfig = taskTypeConfig[task.type]
                 const statusConfig = taskStatusConfig[task.status]
-                
+
                 return (
-                  <div key={task.id} className="p-3 bg-gray-50 rounded-lg">
+                  <div key={task.id} className="p-3 theme-subtle rounded-lg">
                     <div className="flex items-center justify-between mb-2">
                       <div className="flex items-center space-x-2">
                         <div className={`p-1 rounded ${typeConfig.bgColor} ${typeConfig.color}`}>
                           {typeConfig.icon}
                         </div>
-                        <span className="font-medium text-gray-900">{typeConfig.label}</span>
+                        <span className="font-medium theme-text-primary">{typeConfig.label}</span>
                       </div>
                       <div className={`px-2 py-1 rounded-full text-xs font-medium ${statusConfig.bgColor} ${statusConfig.color}`}>
                         {statusConfig.label}
                       </div>
                     </div>
-                    
+
                     {task.status === 'running' && (
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
                           <span>Progress</span>
                           <span>{task.progress}%</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2">
-                          <div 
+                        <div className="w-full theme-progress-track rounded-full h-2">
+                          <div
                             className={`h-2 rounded-full transition-all duration-300 ${getProgressColor(task.progress)}`}
                             style={{ width: `${task.progress}%` }}
                           ></div>
                         </div>
                         {task.progressMessage && (
-                          <div className="text-xs text-gray-600">{task.progressMessage}</div>
+                          <div className="text-xs theme-secondary-text break-words">{task.progressMessage}</div>
                         )}
                       </div>
                     )}
-                    
-                    <div className="flex justify-between text-xs text-gray-500 mt-2">
+
+                    <div className="flex justify-between text-xs theme-muted-text mt-2">
                       <span>Started: {new Date(task.startedAt || task.createdAt).toLocaleTimeString()}</span>
                       {task.estimatedDuration && (
                         <span>ETA: {formatDuration(task.estimatedDuration)}</span>
@@ -321,30 +322,30 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
         )}
 
         {selectedView === 'history' && (
-          <div className="space-y-3">
+          <div className="space-y-3 pb-2">
             {taskHistory.length === 0 ? (
               <div className="text-center py-8">
-                <div className="text-gray-400 mb-2">
+                <div className="theme-muted-text mb-2">
                   <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                   </svg>
                 </div>
-                <p className="text-gray-500">No task history</p>
+                <p className="theme-secondary-text">No task history</p>
               </div>
             ) : (
               taskHistory.slice(0, 10).map((task) => {
                 const typeConfig = taskTypeConfig[task.type]
                 const statusConfig = taskStatusConfig[task.status]
-                
+
                 return (
-                  <div key={task.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div key={task.id} className="flex items-center justify-between p-3 theme-subtle rounded-lg">
                     <div className="flex items-center space-x-3">
                       <div className={`p-1 rounded ${typeConfig.bgColor} ${typeConfig.color}`}>
                         {typeConfig.icon}
                       </div>
                       <div>
-                        <div className="font-medium text-gray-900">{typeConfig.label}</div>
-                        <div className="text-sm text-gray-600">
+                        <div className="font-medium theme-text-primary">{typeConfig.label}</div>
+                        <div className="text-sm theme-secondary-text">
                           {task.completedAt ? new Date(task.completedAt).toLocaleString() : 'In progress'}
                         </div>
                       </div>
@@ -354,12 +355,12 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
                         {statusConfig.label}
                       </div>
                       {task.actualDuration && (
-                        <div className="text-xs text-gray-500 mt-1">
+                        <div className="text-xs theme-muted-text mt-1">
                           {formatDuration(task.actualDuration)}
                         </div>
                       )}
-                    </div>
                   </div>
+                </div>
                 )
               })
             )}

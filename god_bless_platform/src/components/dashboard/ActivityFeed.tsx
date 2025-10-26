@@ -208,18 +208,18 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
   const uniqueTypes = Array.from(new Set(activities.map(a => a.type)))
 
   return (
-    <div className={`activity-feed bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div className={`activity-feed theme-card rounded-lg overflow-hidden flex flex-col ${className}`}>
       {/* Header */}
-      <div className="p-4 border-b border-gray-200">
+      <div className="p-4 theme-card-header">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center space-x-3">
-            <h3 className="text-lg font-semibold text-gray-900">Recent Activity</h3>
-            <div className={`flex items-center space-x-2 text-sm ${isConnected ? 'text-green-600' : 'text-gray-500'}`}>
+            <h3 className="text-lg font-semibold theme-text-primary">Recent Activity</h3>
+            <div className={`flex items-center space-x-2 text-sm ${isConnected ? 'text-green-600' : 'theme-muted-text'}`}>
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-gray-400'}`}></div>
               <span>{isConnected ? 'Live' : 'Offline'}</span>
             </div>
           </div>
-          <div className="text-sm text-gray-500">
+          <div className="text-sm theme-muted-text">
             {filteredActivities.length} of {activities.length} activities
           </div>
         </div>
@@ -233,10 +233,10 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                 placeholder="Search activities..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border theme-border rounded-lg theme-surface focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-5 w-5 theme-muted-text" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                 </svg>
               </div>
@@ -254,9 +254,9 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                     onClick={() => toggleTypeFilter(type)}
                     className={`
                       inline-flex items-center space-x-2 px-3 py-1 rounded-full text-xs font-medium transition-colors
-                      ${isSelected 
-                        ? `${config.color} ${config.bgColor} ring-2 ring-offset-1 ring-current` 
-                        : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+                      ${isSelected
+                        ? `${config.color} ${config.bgColor} ring-2 ring-offset-1 ring-current`
+                        : 'theme-chip theme-hover'
                       }
                     `}
                   >
@@ -265,11 +265,11 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                   </button>
                 )
               })}
-              
+
               {(selectedTypes.size > 0 || searchTerm) && (
                 <button
                   onClick={clearFilters}
-                  className="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+                  className="inline-flex items-center space-x-1 px-3 py-1 rounded-full text-xs font-medium theme-chip theme-hover"
                 >
                   <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -283,45 +283,45 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
       </div>
 
       {/* Activity List */}
-      <div className="max-h-96 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {filteredActivities.length === 0 ? (
           <div className="p-8 text-center">
-            <div className="text-gray-400 mb-2">
+            <div className="theme-muted-text mb-2">
               <svg className="w-12 h-12 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
               </svg>
             </div>
-            <p className="text-gray-500">
+            <p className="theme-secondary-text">
               {activities.length === 0 ? 'No activities yet' : 'No activities match your filters'}
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="theme-divider-y">
             {filteredActivities.map((activity) => {
               const config = activityTypeConfig[activity.type]
-              
+
               return (
-                <div key={activity.id} className="p-4 hover:bg-gray-50 transition-colors">
+                <div key={activity.id} className="p-4 theme-hover transition-colors">
                   <div className="flex items-start space-x-3">
                     <div className={`flex-shrink-0 p-2 rounded-full ${config.bgColor} ${config.color}`}>
                       {config.icon}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <p className="text-sm font-medium text-gray-900">
+                        <p className="text-sm font-medium theme-text-primary">
                           {config.label}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs theme-muted-text">
                           {formatTimestamp(activity.timestamp)}
                         </p>
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm theme-secondary-text mt-1 break-words">
                         {activity.message}
                       </p>
                       {activity.metadata && Object.keys(activity.metadata).length > 0 && (
-                        <div className="mt-2 text-xs text-gray-500">
+                        <div className="mt-2 text-xs theme-muted-text break-words">
                           {Object.entries(activity.metadata).map(([key, value]) => (
-                            <span key={key} className="mr-3">
+                            <span key={key} className="mr-3 break-all">
                               {key}: {String(value)}
                             </span>
                           ))}

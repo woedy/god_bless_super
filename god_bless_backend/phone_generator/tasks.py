@@ -67,6 +67,8 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
         batch_count = 0
         failed_attempts = 0
         max_failed_attempts = 10
+        auto_validation_task_id = None
+        auto_validation_target_count = 0
         
         # Calculate number of batches
         total_batches = (quantity + batch_size - 1) // batch_size
@@ -186,38 +188,19 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
                 failed_attempts += 1
                 logger.warning(f"No unique numbers in batch {batch_count}. Attempt {failed_attempts}/{max_failed_attempts}")
         
-        # Mark task as completed
-        generation_task.status = 'completed'
-        generation_task.completed_at = timezone.now()
-        generation_task.progress = 100
-        generation_task.processed_items = total_generated
-        generation_task.successful_items = total_generated
-        generation_task.result_data = {
+        # Prepare result metadata that will be persisted and sent to clients
+        result_data = {
             'total_generated': total_generated,
             'area_code': area_code,
             'batches_processed': batch_count,
-            'success_rate': (total_generated / quantity) * 100 if quantity > 0 else 0
+            'success_rate': (total_generated / quantity) * 100 if quantity > 0 else 0,
+            'auto_validation_task_id': auto_validation_task_id,
+            'auto_validation_target_count': auto_validation_target_count,
+            'auto_validate': auto_validate,
         }
-        generation_task.save()
-        
-        # Final progress update
-        self.update_progress(
-            progress=100,
-            current_step=f"Generation completed - {total_generated} numbers created",
-            processed_items=total_generated,
-            total_items=quantity
-        )
-        
-        # Send completion notification
-        self._send_task_notification('task_completed', {
-            'task_id': self.request.id,
-            'status': 'completed',
-            'result_data': generation_task.result_data,
-            'timestamp': timezone.now().isoformat()
-        })
-        
+
         logger.info(f"Phone generation completed: {total_generated} numbers generated")
-        
+
         # Auto-validate generated numbers if requested
         if auto_validate and total_generated > 0:
             logger.info(f"Starting auto-validation for {total_generated} generated numbers")
@@ -235,23 +218,62 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
                 from phone_generator.tasks import validate_phone_numbers_task
                 validation_task = validate_phone_numbers_task.delay(
                     user_id=user.user_id,
+                    project_id=project.id if project else None,
                     phone_ids=generated_phone_ids,
                     batch_size=500
                 )
 
                 logger.info(f"Auto-validation task started: {validation_task.id}")
 
+                auto_validation_task_id = validation_task.id
+                auto_validation_target_count = len(generated_phone_ids)
+
                 # Update result data to include validation task info
-                generation_task.result_data['auto_validation_task_id'] = validation_task.id
-                generation_task.result_data['auto_validation_target_count'] = len(generated_phone_ids)
-                generation_task.save()
-        
+                result_data.update({
+                    'auto_validation_task_id': auto_validation_task_id,
+                    'auto_validation_target_count': auto_validation_target_count,
+                    'auto_validate': True,
+                })
+
+        # Mark task as completed (after potential auto-validation metadata is populated)
+        generation_task.status = 'completed'
+        generation_task.completed_at = timezone.now()
+        generation_task.progress = 100
+        generation_task.processed_items = total_generated
+        generation_task.successful_items = total_generated
+        generation_task.result_data = result_data
+        generation_task.save()
+
+        # Final progress update (reflecting that generation finished and validation may be underway)
+        final_step = (
+            f"Auto-validation started for {auto_validation_target_count} numbers"
+            if auto_validate and auto_validation_task_id
+            else f"Generation completed - {total_generated} numbers created"
+        )
+        self.update_progress(
+            progress=100,
+            current_step=final_step,
+            processed_items=total_generated,
+            total_items=quantity
+        )
+
+        # Send completion notification with up-to-date metadata so the UI can follow validation progress
+        self._send_task_notification('task_completed', {
+            'task_id': self.request.id,
+            'status': 'completed',
+            'result_data': result_data,
+            'timestamp': timezone.now().isoformat()
+        })
+
         return {
             'message': f'Successfully generated {total_generated} phone numbers',
             'total_generated': total_generated,
             'area_code': area_code,
             'task_id': generation_task.id,
-            'success_rate': (total_generated / quantity) * 100 if quantity > 0 else 0
+            'success_rate': (total_generated / quantity) * 100 if quantity > 0 else 0,
+            'auto_validation_task_id': result_data['auto_validation_task_id'],
+            'auto_validation_target_count': result_data['auto_validation_target_count'],
+            'auto_validate': result_data['auto_validate'],
         }
         
     except Exception as e:

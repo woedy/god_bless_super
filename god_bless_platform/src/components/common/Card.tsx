@@ -39,10 +39,10 @@ export const Card: React.FC<CardProps> = ({
   }
 
   const baseClasses = `
-    bg-white dark:bg-gray-800 rounded-lg transition-colors duration-200
+    theme-surface rounded-xl transition-colors duration-200
     ${paddingClasses[padding]}
     ${shadowClasses[shadow]}
-    ${border ? 'border border-gray-200 dark:border-gray-700' : ''}
+    ${border ? 'border theme-border' : 'border border-transparent'}
     ${hover ? 'hover:shadow-md transition-shadow duration-200' : ''}
     ${className}
   `.trim()
