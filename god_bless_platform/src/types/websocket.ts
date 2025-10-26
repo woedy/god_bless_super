@@ -78,6 +78,7 @@ export interface ChannelFilters {
   userId?: string
   projectId?: string
   taskType?: string
+  taskId?: string
   messageTypes?: WebSocketMessageType[]
 }
 

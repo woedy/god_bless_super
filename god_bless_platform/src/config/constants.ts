@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
     LIST: '/phone-generator/list-numbers/',
     GENERATE: '/phone-generator/generate-numbers-enhanced/',
     VALIDATE: '/phone-validator/start-validation-free/',
+    VALIDATE_ENHANCED: '/phone-generator/validate-numbers-enhanced/',
     EXPORT: '/phone-generator/export/',
     IMPORT: '/phone-generator/import/',
     DELETE_ALL: '/phone-generator/delete-all/',
@@ -71,10 +72,19 @@ export const API_ENDPOINTS = {
   
   // Tasks
   TASKS: {
-    LIST: '/tasks/',
-    DETAIL: (id: string) => `/tasks/${id}/`,
-    CANCEL: (id: string) => `/tasks/${id}/cancel/`,
-    RETRY: (id: string) => `/tasks/${id}/retry/`
+    USER: '/tasks/user/',
+    ACTIVE: '/tasks/active/',
+    STATUS: (id: string) => `/tasks/status/${id}/`,
+    CANCEL: (id: string) => `/tasks/cancel/${id}/`,
+    RETRY: (id: string) => `/tasks/retry/${id}/`,
+    NOTIFICATIONS: '/tasks/notifications/',
+    NOTIFICATION: (notificationId: number) =>
+      `/tasks/notifications/${notificationId}/`,
+    NOTIFICATION_READ: (notificationId: number) =>
+      `/tasks/notifications/${notificationId}/read/`,
+    NOTIFICATIONS_READ_ALL: '/tasks/notifications/read-all/',
+    NOTIFICATION_DELETE: (notificationId: number) =>
+      `/tasks/notifications/${notificationId}/delete/`
   }
 } as const
 
