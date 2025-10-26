@@ -13,6 +13,8 @@ class ProgressTrackingTask(Task):
     def __init__(self):
         super().__init__()
         self.task_progress = None
+        self._user_channel_name = None
+        self._user_identifier = None
     
     def before_start(self, task_id, args, kwargs):
         """Called before task execution"""
@@ -34,6 +36,8 @@ class ProgressTrackingTask(Task):
                     status=TaskStatus.PENDING
                 )
                 logger.info(f"Task {task_id} created for user {user_id}")
+                self._user_channel_name = f"user_{user.pk}"
+                self._user_identifier = getattr(user, 'user_id', None) or str(user.pk)
             except User.DoesNotExist:
                 logger.error(f"User {user_id} not found for task {task_id}")
     
@@ -70,26 +74,42 @@ class ProgressTrackingTask(Task):
     def update_progress(self, progress, current_step=None, processed_items=None, total_items=None):
         """Update task progress"""
         if self.task_progress:
+            update_fields = ['progress']
             self.task_progress.progress = min(100, max(0, progress))
-            
+
             if current_step:
                 self.task_progress.current_step = current_step
-            
+                update_fields.append('current_step')
+
             if processed_items is not None:
                 self.task_progress.processed_items = processed_items
-            
+                update_fields.append('processed_items')
+
             if total_items is not None:
                 self.task_progress.total_items = total_items
-            
+                update_fields.append('total_items')
+
+            if self.task_progress.status not in [TaskStatus.SUCCESS, TaskStatus.FAILURE, TaskStatus.REVOKED]:
+                self.task_progress.status = TaskStatus.PROGRESS
+                update_fields.append('status')
+
             # Estimate completion time
             if self.task_progress.started_at and progress > 0:
                 elapsed = (timezone.now() - self.task_progress.started_at).total_seconds()
                 estimated_total = (elapsed / progress) * 100
                 remaining = estimated_total - elapsed
                 self.task_progress.estimated_completion = timezone.now() + timedelta(seconds=remaining)
-            
-            self.task_progress.save()
-            
+                update_fields.append('estimated_completion')
+
+            seen = set()
+            unique_fields = []
+            for field in update_fields:
+                if field not in seen:
+                    unique_fields.append(field)
+                    seen.add(field)
+
+            self.task_progress.save(update_fields=unique_fields)
+
             # Send WebSocket notification
             self._send_progress_notification()
     
@@ -104,20 +124,40 @@ class ProgressTrackingTask(Task):
         if self.task_progress:
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
-            
+
             channel_layer = get_channel_layer()
             if channel_layer:
                 try:
+                    user_identifier = self._user_identifier or str(self.task_progress.user_id)
+                    timestamp = timezone.now().isoformat()
+                    payload = {
+                        "taskId": self.task_progress.task_id,
+                        "task_id": self.task_progress.task_id,
+                        "type": self.task_progress.category,
+                        "status": self._map_status(self.task_progress.status),
+                        "progress": self.task_progress.progress,
+                        "currentStep": self.task_progress.current_step,
+                        "progressMessage": self.task_progress.current_step,
+                        "processedItems": self.task_progress.processed_items,
+                        "totalItems": self.task_progress.total_items,
+                        "userId": user_identifier,
+                        "timestamp": timestamp,
+                    }
+
                     async_to_sync(channel_layer.group_send)(
                         f"user_{self.task_progress.user_id}",
                         {
                             "type": "task_progress",
+                            "channel": "task_progress",
+                            "data": payload,
                             "task_id": self.task_progress.task_id,
-                            "status": self.task_progress.status,
+                            "status": payload["status"],
                             "progress": self.task_progress.progress,
                             "current_step": self.task_progress.current_step,
                             "processed_items": self.task_progress.processed_items,
                             "total_items": self.task_progress.total_items,
+                            "user_id": user_identifier,
+                            "timestamp": timestamp,
                         }
                     )
                 except Exception as e:
@@ -128,18 +168,73 @@ class ProgressTrackingTask(Task):
         try:
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
-            
+
             channel_layer = get_channel_layer()
             if channel_layer and self.task_progress:
+                channel_name, default_status = self._resolve_channel(notification_type)
+                user_identifier = self._user_identifier or str(self.task_progress.user_id)
+                timestamp = data.get('timestamp') or timezone.now().isoformat()
+                status = data.get('status') or default_status
+
+                payload = {
+                    "taskId": self.task_progress.task_id,
+                    "task_id": self.task_progress.task_id,
+                    "type": self.task_progress.category,
+                    "status": status,
+                    "progress": self.task_progress.progress,
+                    "currentStep": data.get('current_step') or self.task_progress.current_step,
+                    "progressMessage": data.get('message') or data.get('current_step') or self.task_progress.current_step,
+                    "processedItems": self.task_progress.processed_items,
+                    "totalItems": self.task_progress.total_items,
+                    "result": data.get('result_data'),
+                    "error": data.get('error_message'),
+                    "userId": user_identifier,
+                    "timestamp": timestamp,
+                }
+
+                event = {
+                    "type": notification_type,
+                    "channel": channel_name,
+                    "data": payload,
+                    "task_id": self.task_progress.task_id,
+                    "status": status,
+                    "result_data": data.get('result_data'),
+                    "error_message": data.get('error_message'),
+                    "timestamp": timestamp,
+                }
+
                 async_to_sync(channel_layer.group_send)(
                     f"user_{self.task_progress.user_id}",
-                    {
-                        "type": notification_type,
-                        **data
-                    }
+                    event
                 )
         except Exception as e:
             logger.error(f"Failed to send WebSocket notification: {e}")
+
+    def _map_status(self, status):
+        """Map internal task status to frontend-friendly status"""
+        status_map = {
+            TaskStatus.PENDING: 'pending',
+            TaskStatus.STARTED: 'running',
+            TaskStatus.PROGRESS: 'running',
+            TaskStatus.SUCCESS: 'completed',
+            TaskStatus.FAILURE: 'failed',
+            TaskStatus.RETRY: 'retrying',
+            TaskStatus.REVOKED: 'cancelled',
+        }
+        return status_map.get(status, str(status).lower())
+
+    def _resolve_channel(self, notification_type):
+        """Determine WebSocket channel and default status for notification type"""
+        mapping = {
+            'task_started': ('task_progress', 'running'),
+            'task_completed': ('task_complete', 'completed'),
+            'task_failed': ('task_error', 'failed'),
+        }
+        default_channel, default_status = mapping.get(
+            notification_type,
+            ('system_notifications', self._map_status(self.task_progress.status))
+        )
+        return default_channel, default_status
 
 
 class BatchProcessingTask(ProgressTrackingTask):
