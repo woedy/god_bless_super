@@ -266,9 +266,12 @@ class HttpApiClient {
       clearTimeout(timeoutId)
 
       if (error instanceof ApiClientError) {
-        // Handle 401 Unauthorized - clear tokens since backend doesn't support refresh
         if (error.status === 401 && config.requiresAuth !== false) {
-          this.clearTokens()
+          console.warn(
+            "API request returned 401 Unauthorized",
+            endpoint,
+            error
+          );
         }
         throw error
       }

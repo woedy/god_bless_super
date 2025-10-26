@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button, Select, Modal, Checkbox, Card, Badge, ProgressBar } from '../common'
 import { phoneNumberService } from '../../services'
-import { websocketManager } from '../../services'
+import { useTaskProgress } from '../../hooks'
 import type { ExportParams, NumberFilters, Project } from '../../types'
 
 interface ExportDialogProps {
@@ -71,7 +71,6 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
 
   // Export progress state
   const [isExporting, setIsExporting] = useState<boolean>(false)
-  const [progress, setProgress] = useState<number>(0)
   const [progressMessage, setProgressMessage] = useState<string>('')
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null)
@@ -83,7 +82,6 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   // Reset state when dialog opens/closes
   useEffect(() => {
     if (isOpen) {
-      setProgress(0)
       setProgressMessage('')
       setCurrentTaskId(null)
       setDownloadUrl(null)
@@ -125,56 +123,64 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     }
   }
 
-  // WebSocket task progress monitoring
+  const {
+    task,
+    progress,
+    progressMessage: taskProgressMessage,
+    isCompleted,
+    isFailed,
+    isCancelled,
+    error: taskError
+  } = useTaskProgress(currentTaskId)
+
   useEffect(() => {
-    if (currentTaskId) {
-      const handleTaskProgress = (message: { data?: any; [key: string]: any }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setProgress(data.progress || 0)
-          setProgressMessage(data.message || data.progressMessage || '')
-        }
-      }
-
-      const handleTaskComplete = (message: { data?: any; [key: string]: any }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setIsExporting(false)
-          setProgress(100)
-          setProgressMessage('Export completed successfully!')
-          
-          const result = data.result
-          if (result?.downloadUrl) {
-            setDownloadUrl(result.downloadUrl)
-          }
-          
-          setCurrentTaskId(null)
-          onSuccess?.('Export completed successfully!')
-        }
-      }
-
-      const handleTaskError = (message: { data?: any; [key: string]: unknown }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setIsExporting(false)
-          setProgress(0)
-          setProgressMessage('')
-          setCurrentTaskId(null)
-          onError?.(data.error || 'Export failed')
-        }
-      }
-
-      const unsubscribeProgress = websocketManager.subscribe('task_progress', handleTaskProgress)
-      const unsubscribeComplete = websocketManager.subscribe('task_complete', handleTaskComplete)
-      const unsubscribeError = websocketManager.subscribe('task_error', handleTaskError)
-
-      return () => {
-        unsubscribeProgress()
-        unsubscribeComplete()
-        unsubscribeError()
-      }
+    if (taskProgressMessage) {
+      setProgressMessage(taskProgressMessage)
     }
-  }, [currentTaskId, onSuccess, onError])
+  }, [taskProgressMessage])
+
+  useEffect(() => {
+    if (!currentTaskId) {
+      return
+    }
+
+    if (isCompleted) {
+      setIsExporting(false)
+      setProgressMessage(prev => prev || 'Export completed successfully!')
+
+      const resultPayload = task?.result?.data ?? task?.result
+      const url =
+        task?.result?.downloadUrl ||
+        (resultPayload as any)?.downloadUrl ||
+        (resultPayload as any)?.file_url
+
+      if (typeof url === 'string') {
+        setDownloadUrl(url)
+      }
+
+      setCurrentTaskId(null)
+      onSuccess?.('Export completed successfully!')
+    }
+  }, [isCompleted, currentTaskId, task?.result, onSuccess])
+
+  useEffect(() => {
+    if (!currentTaskId) {
+      return
+    }
+
+    if (isFailed || isCancelled) {
+      setIsExporting(false)
+      setCurrentTaskId(null)
+      setProgressMessage('')
+
+      const failureMessage =
+        task?.error?.message ??
+        taskError ??
+        (isCancelled ? 'Export was cancelled' : 'Export failed')
+
+      onError?.(failureMessage)
+    }
+  }, [isFailed, isCancelled, taskError, task?.error?.message, currentTaskId, onError])
 
   // Update estimated size when options change
   useEffect(() => {
@@ -196,7 +202,6 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
   const handleExport = async () => {
     try {
       setIsExporting(true)
-      setProgress(0)
       setProgressMessage('Starting export...')
       setDownloadUrl(null)
 
@@ -237,12 +242,10 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
           // Direct download available
           setDownloadUrl(exportData.downloadUrl)
           setIsExporting(false)
-          setProgress(100)
           setProgressMessage('Export ready for download!')
         } else if (exportData && exportData.content !== undefined) {
           // Direct export completed - create download from content
           setIsExporting(false)
-          setProgress(100)
           setProgressMessage('Export completed!')
           
           const content = exportData.content
@@ -304,7 +307,6 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     } catch (error) {
       console.error('Export failed:', error)
       setIsExporting(false)
-      setProgress(0)
       setProgressMessage('')
       onError?.(error instanceof Error ? error.message : 'Export failed')
     }
@@ -386,7 +388,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
                 Exporting Numbers...
               </span>
               <span className="text-sm text-blue-700">
-                {progress}%
+                {Math.round(progress)}%
               </span>
             </div>
             <ProgressBar progress={progress} className="mb-2" />

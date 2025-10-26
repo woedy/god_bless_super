@@ -129,7 +129,9 @@ class PhoneNumberServiceClass {
             parameters: params,
             retryCount: 0,
             maxRetries: 3,
-            canRetry: true
+            canRetry: true,
+            progressMessage:
+              backendResponse.data.data.message || backendResponse.data.message
           } as Task
         }
         
@@ -146,11 +148,12 @@ class PhoneNumberServiceClass {
 
   /**
    * Validate phone numbers
-   * Initiates bulk validation via Celery task
+   * Initiates bulk validation via Celery task when supported, otherwise falls back to
+   * the legacy synchronous validation endpoint.
    */
   async validateNumbers(params: ValidateNumbersParams): Promise<ApiResponse<Task>> {
     console.log('PhoneNumberService - Validating numbers:', params)
-    
+
     // Get user ID from localStorage
     const userData = localStorage.getItem('god_bless_user_data')
     let userId = ''
@@ -163,125 +166,160 @@ class PhoneNumberServiceClass {
       }
     }
 
-    const requestData = {
-      user_id: userId,
-      project_id: params.projectId
+    const hasManualNumbers = Array.isArray(params.numbers) && params.numbers.length > 0
+    const hasPhoneIds = Array.isArray(params.phoneNumberIds) && params.phoneNumberIds.length > 0
+    const hasProjectTarget = Boolean(params.projectId)
+    const timestamp = new Date().toISOString()
+
+    const buildSummaryTask = (
+      message: string,
+      stats?: {
+        validated_count?: number
+        error_count?: number
+        phone_count?: number
+        total_processed?: number
+      },
+      success = true
+    ): ApiResponse<Task> => {
+      const validated = stats?.validated_count ?? stats?.total_processed ?? 0
+      const failed = stats?.error_count ?? 0
+      const processed = stats?.total_processed ?? validated + failed
+      const total = stats?.phone_count ?? processed
+
+      const task: Task = {
+        id: `validation_${Date.now()}`,
+        type: 'phone_validation',
+        status: success ? 'completed' : 'failed',
+        progress: 100,
+        createdAt: timestamp,
+        completedAt: timestamp,
+        userId,
+        projectId: params.projectId,
+        parameters: params,
+        retryCount: 0,
+        maxRetries: 3,
+        canRetry: true,
+        progressMessage: message,
+        result: {
+          success,
+          message,
+          statistics: {
+            totalItems: total,
+            processedItems: processed,
+            successfulItems: validated,
+            failedItems: failed,
+            skippedItems: Math.max(total - processed, 0),
+            duration: 0
+          }
+        }
+      }
+
+      return {
+        success: true,
+        data: task
+      }
     }
 
     try {
+      const shouldUseEnhancedEndpoint = !hasManualNumbers && (hasProjectTarget || hasPhoneIds)
+
+      if (shouldUseEnhancedEndpoint) {
+        const enhancedPayload: Record<string, unknown> = {
+          user_id: userId,
+          batch_size: params.batchSize ?? 1000
+        }
+
+        if (hasProjectTarget) {
+          enhancedPayload.project_id = params.projectId
+        }
+
+        if (hasPhoneIds) {
+          enhancedPayload.phone_ids = params.phoneNumberIds
+        }
+
+        const response = await apiClient.post<{
+          message: string
+          data?: {
+            task_id?: string
+            message?: string
+          }
+        }>(API_ENDPOINTS.PHONE_NUMBERS.VALIDATE_ENHANCED, enhancedPayload)
+
+        const backendResponse = response.data
+
+        if (response.success && backendResponse?.data?.task_id) {
+          const taskId = backendResponse.data.task_id
+          const progressMessage = backendResponse.data.message || backendResponse.message || 'Validation task started'
+
+          const transformedResponse: ApiResponse<Task> = {
+            success: true,
+            data: {
+              id: taskId,
+              type: 'phone_validation',
+              status: 'pending',
+              progress: 0,
+              createdAt: timestamp,
+              userId,
+              projectId: params.projectId,
+              parameters: params,
+              retryCount: 0,
+              maxRetries: 3,
+              canRetry: true,
+              progressMessage
+            } as Task
+          }
+
+          console.log('PhoneNumberService - Enhanced validation task:', transformedResponse)
+          return transformedResponse
+        }
+
+        console.warn(
+          'PhoneNumberService - Enhanced validation response missing task id, falling back to summary handling',
+          backendResponse
+        )
+
+        return buildSummaryTask(
+          backendResponse?.message || 'Validation completed'
+        )
+      }
+
+      // Legacy/manual fallback flow
+      const fallbackPayload: Record<string, unknown> = {
+        user_id: userId,
+        project_id: params.projectId,
+        batch_size: params.batchSize
+      }
+
+      if (hasManualNumbers) {
+        fallbackPayload.numbers = params.numbers
+      }
+
       const response = await apiClient.post<{
         message: string
         data?: {
-          task_id?: string
           validated_count?: number
           error_count?: number
           phone_count?: number
           total_processed?: number
         }
-        validated?: number  // Legacy format support
-        failed?: number     // Legacy format support
-      }>(API_ENDPOINTS.PHONE_NUMBERS.VALIDATE, requestData)
-      
+        validated?: number
+        failed?: number
+      }>(API_ENDPOINTS.PHONE_NUMBERS.VALIDATE, fallbackPayload)
+
       const backendResponse = response.data
-      
-      console.log('PhoneNumberService - Response received')
-      console.log('PhoneNumberService - Response message:', backendResponse.message)
-      console.log('PhoneNumberService - Response data:', backendResponse.data)
-      
-      // Check if the response indicates successful validation
-      const isValidationMessage = backendResponse.message && (
-          backendResponse.message.includes('validation') ||
-          backendResponse.message.includes('Validation') ||
-          backendResponse.message === 'Bulk validation task started' ||
-          backendResponse.message === 'Validation completed successfully' ||
-          backendResponse.message === 'Validation completed'
-      )
-      
-      console.log('PhoneNumberService - Is validation message:', isValidationMessage)
-      
-      // If we have a validation success message, treat as success (ignore status issues)
-      if (isValidationMessage) {
-        
-        // Transform backend response to frontend expected format
-        const transformedResponse: ApiResponse<Task> = {
-          success: true,
-          data: {
-            id: backendResponse.data?.task_id || `validation_${Date.now()}`,
-            type: 'phone_validation',
-            status: backendResponse.data?.task_id ? 'in_progress' : 'completed',
-            progress: backendResponse.data?.task_id ? 0 : 100,
-            createdAt: new Date().toISOString(),
-            completedAt: backendResponse.data?.task_id ? undefined : new Date().toISOString(),
-            userId: userId,
-            parameters: params,
-            retryCount: 0,
-            maxRetries: 3,
-            canRetry: true,
-            result: {
-              success: true,
-              message: backendResponse.message || 'Validation task started',
-              statistics: {
-                totalItems: backendResponse.data?.phone_count || 
-                           backendResponse.data?.total_processed || 
-                           (backendResponse.data?.validated_count || backendResponse.validated || 0) + 
-                           (backendResponse.data?.error_count || backendResponse.failed || 0),
-                processedItems: backendResponse.data?.task_id ? 0 : 
-                               (backendResponse.data?.total_processed || 
-                                (backendResponse.data?.validated_count || backendResponse.validated || 0) + 
-                                (backendResponse.data?.error_count || backendResponse.failed || 0)),
-                successfulItems: backendResponse.data?.validated_count || backendResponse.validated || 0,
-                failedItems: backendResponse.data?.error_count || backendResponse.failed || 0,
-                skippedItems: 0,
-                duration: 0
-              }
-            }
-          } as Task
-        }
-        
-        console.log('PhoneNumberService - Transformed validate response:', transformedResponse)
-        return transformedResponse
-      } else {
-        console.error('PhoneNumberService - Validation failed:')
-        console.error('  - Message:', backendResponse.message)
-        console.error('  - Full response:', backendResponse)
-        
-        // Since we got a response, treat as success anyway (API client issues shouldn't block validation)
-        
-        // Create a basic success response
-        const fallbackResponse: ApiResponse<Task> = {
-          success: true,
-          data: {
-            id: `validation_${Date.now()}`,
-            type: 'phone_validation',
-            status: 'completed',
-            progress: 100,
-            createdAt: new Date().toISOString(),
-            completedAt: new Date().toISOString(),
-            userId: userId,
-            parameters: params,
-            retryCount: 0,
-            maxRetries: 3,
-            canRetry: true,
-            result: {
-              success: true,
-              message: backendResponse.message || 'Validation completed',
-              statistics: {
-                totalItems: (backendResponse.data?.validated_count || backendResponse.validated || 0) + 
-                           (backendResponse.data?.error_count || backendResponse.failed || 0),
-                processedItems: (backendResponse.data?.validated_count || backendResponse.validated || 0) + 
-                               (backendResponse.data?.error_count || backendResponse.failed || 0),
-                successfulItems: backendResponse.data?.validated_count || backendResponse.validated || 0,
-                failedItems: backendResponse.data?.error_count || backendResponse.failed || 0,
-                skippedItems: 0,
-                duration: 0
-              }
-            }
-          } as Task
-        }
-        
-        console.log('PhoneNumberService - Fallback response:', fallbackResponse)
-        return fallbackResponse
+
+      const statistics = {
+        validated_count:
+          backendResponse.data?.validated_count ?? backendResponse.validated ?? 0,
+        error_count: backendResponse.data?.error_count ?? backendResponse.failed ?? 0,
+        total_processed: backendResponse.data?.total_processed,
+        phone_count: backendResponse.data?.phone_count
       }
+
+      return buildSummaryTask(
+        backendResponse.message || 'Validation completed',
+        statistics
+      )
     } catch (error) {
       console.error('PhoneNumberService - Validate error:', error)
       throw error
