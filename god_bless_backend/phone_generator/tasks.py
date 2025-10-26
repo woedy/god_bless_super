@@ -67,6 +67,8 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
         batch_count = 0
         failed_attempts = 0
         max_failed_attempts = 10
+        auto_validation_task_id = None
+        auto_validation_target_count = 0
         
         # Calculate number of batches
         total_batches = (quantity + batch_size - 1) // batch_size
@@ -196,7 +198,10 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
             'total_generated': total_generated,
             'area_code': area_code,
             'batches_processed': batch_count,
-            'success_rate': (total_generated / quantity) * 100 if quantity > 0 else 0
+            'success_rate': (total_generated / quantity) * 100 if quantity > 0 else 0,
+            'auto_validation_task_id': auto_validation_task_id,
+            'auto_validation_target_count': auto_validation_target_count,
+            'auto_validate': auto_validate,
         }
         generation_task.save()
         
@@ -241,9 +246,13 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
 
                 logger.info(f"Auto-validation task started: {validation_task.id}")
 
+                auto_validation_task_id = validation_task.id
+                auto_validation_target_count = len(generated_phone_ids)
+
                 # Update result data to include validation task info
-                generation_task.result_data['auto_validation_task_id'] = validation_task.id
-                generation_task.result_data['auto_validation_target_count'] = len(generated_phone_ids)
+                generation_task.result_data['auto_validation_task_id'] = auto_validation_task_id
+                generation_task.result_data['auto_validation_target_count'] = auto_validation_target_count
+                generation_task.result_data['auto_validate'] = True
                 generation_task.save()
         
         return {
@@ -251,7 +260,10 @@ def generate_phone_numbers_task(self, user_id, project_id, area_code, quantity,
             'total_generated': total_generated,
             'area_code': area_code,
             'task_id': generation_task.id,
-            'success_rate': (total_generated / quantity) * 100 if quantity > 0 else 0
+            'success_rate': (total_generated / quantity) * 100 if quantity > 0 else 0,
+            'auto_validation_task_id': auto_validation_task_id,
+            'auto_validation_target_count': auto_validation_target_count if auto_validation_task_id else 0,
+            'auto_validate': auto_validate,
         }
         
     except Exception as e:
