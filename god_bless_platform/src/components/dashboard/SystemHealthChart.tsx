@@ -95,7 +95,9 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
   const overallConfig = healthStatusConfig[systemHealth.overall]
 
   return (
-    <div className={`system-health-chart bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div
+      className={`system-health-chart bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col ${className}`}
+    >
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between">
@@ -131,7 +133,7 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
       </div>
 
       {/* Content */}
-      <div className="p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {selectedTab === 'overview' && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
@@ -193,10 +195,10 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
         )}
 
         {selectedTab === 'components' && (
-          <div className="space-y-3">
+          <div className="space-y-3 pb-2">
             {Object.entries(systemHealth.components).map(([name, component]) => {
               const config = healthStatusConfig[component.status]
-              
+
               return (
                 <div key={name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                   <div className="flex items-center space-x-3">
@@ -207,7 +209,7 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
                       <div className="font-medium text-gray-900 capitalize">
                         {name.replace('_', ' ')}
                       </div>
-                      <div className="text-sm text-gray-600">
+                      <div className="text-sm text-gray-600 break-words">
                         {component.message}
                       </div>
                     </div>
@@ -229,7 +231,7 @@ export const SystemHealthChart: React.FC<SystemHealthChartProps> = ({
         )}
 
         {selectedTab === 'resources' && (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-2">
             {Object.entries(systemHealth.resources).map(([name, resource]) => {
               const config = healthStatusConfig[resource.status]
               

@@ -3,11 +3,14 @@
  * Main dashboard with overview and metrics using real-time data
  */
 
-import React, { useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AppLayout } from '../../components/layout'
 import { DashboardOverview } from '../../components/dashboard'
 import { useWebSocket } from '../../hooks/useWebSocket'
+import { useProject } from '../../contexts'
+import { projectService } from '../../services'
 import type { BreadcrumbItem } from '../../types/ui'
+import type { Project } from '../../types'
 
 const breadcrumbs: BreadcrumbItem[] = [
   {
@@ -26,13 +29,74 @@ const breadcrumbs: BreadcrumbItem[] = [
  * Dashboard Page Component
  */
 export function DashboardPage() {
-  const [selectedProjectId, setSelectedProjectId] = useState<string | undefined>()
+  const [projectOptions, setProjectOptions] = useState<Project[]>([])
+  const [isProjectListLoading, setIsProjectListLoading] = useState(false)
+  const [projectListError, setProjectListError] = useState<string | null>(null)
   const { isConnected, connectionStatus } = useWebSocket()
+  const {
+    currentProjectId,
+    currentProject,
+    selectProject
+  } = useProject()
+
+  const combinedProjectOptions = useMemo(() => {
+    if (!currentProject) {
+      return projectOptions
+    }
+
+    const alreadyIncluded = projectOptions.some(project => project.id === currentProject.id)
+    return alreadyIncluded ? projectOptions : [currentProject, ...projectOptions]
+  }, [currentProject, projectOptions])
+
+  const loadProjects = useCallback(async () => {
+    setIsProjectListLoading(true)
+    setProjectListError(null)
+
+    try {
+      const response = await projectService.getProjects({ pageSize: 50 })
+
+      if (response.success) {
+        const payload = (response.data as any)?.results ?? (response.data as any)?.projects ?? response.data
+        const projects = Array.isArray(payload) ? (payload as Project[]) : []
+        setProjectOptions(projects)
+      } else {
+        setProjectOptions([])
+        setProjectListError(response.message || 'Unable to load projects')
+      }
+    } catch (error) {
+      console.error('Failed to load project list for dashboard:', error)
+      setProjectListError(error instanceof Error ? error.message : 'Unable to load projects')
+    } finally {
+      setIsProjectListLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadProjects()
+  }, [loadProjects])
 
   // Handle project context switching
-  const handleProjectChange = (projectId?: string) => {
-    setSelectedProjectId(projectId)
+  const handleProjectChange = async (projectId?: string) => {
+    try {
+      if (!projectId) {
+        await selectProject(null)
+        return
+      }
+
+      const project = combinedProjectOptions.find(item => item.id === projectId)
+      await selectProject(project ?? projectId)
+    } catch (error) {
+      console.error('Failed to switch dashboard project:', error)
+      setProjectListError(error instanceof Error ? error.message : 'Unable to switch project')
+    }
   }
+
+  const activeProjectId = currentProjectId ?? undefined
+  const projectStatusMessage = projectListError
+    ? projectListError
+    : isProjectListLoading && !combinedProjectOptions.length
+      ? 'Loading projects…'
+      : undefined
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -85,15 +149,25 @@ export function DashboardPage() {
                 Filter by Project
               </label>
               <select
-                value={selectedProjectId || ''}
+                value={activeProjectId ?? ''}
                 onChange={(e) => handleProjectChange(e.target.value || undefined)}
-                className="block w-full sm:w-48 border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className="block w-full sm:w-56 border border-gray-300 rounded-lg px-3 py-2.5 sm:py-2 text-base sm:text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                disabled={isProjectListLoading}
               >
                 <option value="">All Projects</option>
-                {/* TODO: Populate with actual projects */}
+                {combinedProjectOptions.map(project => (
+                  <option key={project.id} value={project.id}>
+                    {project.project_name || project.name || 'Untitled project'}
+                  </option>
+                ))}
               </select>
+              {projectStatusMessage && (
+                <p className="mt-1 text-xs text-amber-600">
+                  {projectStatusMessage}
+                </p>
+              )}
             </div>
-            
+
             {/* Real-time Status Indicator - Mobile */}
             <div className="flex sm:hidden items-center justify-center space-x-2 text-sm bg-gray-50 rounded-lg px-3 py-2">
               <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}`}></div>
@@ -105,8 +179,8 @@ export function DashboardPage() {
         </div>
 
         {/* Main Dashboard Content */}
-        <DashboardOverview 
-          projectId={selectedProjectId}
+        <DashboardOverview
+          projectId={activeProjectId}
           className="min-h-screen"
         />
       </div>

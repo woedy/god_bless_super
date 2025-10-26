@@ -153,7 +153,9 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
   }
 
   return (
-    <div className={`task-progress-monitor bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div
+      className={`task-progress-monitor bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col ${className}`}
+    >
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
@@ -188,9 +190,9 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
       </div>
 
       {/* Content */}
-      <div className="p-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {selectedView === 'summary' && (
-          <div className="space-y-4">
+          <div className="space-y-4 pb-2">
             {/* Overall Stats */}
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center p-3 bg-gray-50 rounded-lg">
@@ -260,7 +262,7 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
         )}
 
         {selectedView === 'active' && (
-          <div className="space-y-3">
+          <div className="space-y-3 pb-2">
             {activeTasks.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 mb-2">
@@ -302,7 +304,7 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
                           ></div>
                         </div>
                         {task.progressMessage && (
-                          <div className="text-xs text-gray-600">{task.progressMessage}</div>
+                          <div className="text-xs text-gray-600 break-words">{task.progressMessage}</div>
                         )}
                       </div>
                     )}
@@ -321,7 +323,7 @@ export const TaskProgressMonitor: React.FC<TaskProgressMonitorProps> = ({
         )}
 
         {selectedView === 'history' && (
-          <div className="space-y-3">
+          <div className="space-y-3 pb-2">
             {taskHistory.length === 0 ? (
               <div className="text-center py-8">
                 <div className="text-gray-400 mb-2">

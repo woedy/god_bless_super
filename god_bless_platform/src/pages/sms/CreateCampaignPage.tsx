@@ -3,11 +3,12 @@
  * Page for creating new SMS campaigns
  */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { CampaignCreator } from '../../components/sms'
 import { smsService } from '../../services'
+import { useProject } from '../../contexts'
 import type { BreadcrumbItem, Campaign, CreateCampaignData } from '../../types'
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -29,10 +30,26 @@ const breadcrumbs: BreadcrumbItem[] = [
 export function CreateCampaignPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const projectId = searchParams.get('project')
-  
+  const requestedProjectId = searchParams.get('project')
+
+  const {
+    currentProjectId,
+    selectProject,
+    isReady: isProjectReady
+  } = useProject()
+
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!requestedProjectId || !isProjectReady) {
+      return
+    }
+
+    if (requestedProjectId !== currentProjectId) {
+      void selectProject(requestedProjectId)
+    }
+  }, [requestedProjectId, currentProjectId, isProjectReady, selectProject])
 
   const handleCampaignCreated = (campaign: Campaign) => {
     // Navigate to campaign details or campaigns list
@@ -65,7 +82,7 @@ export function CreateCampaignPage() {
         <CampaignCreator
           onCampaignCreated={handleCampaignCreated}
           onCancel={handleCancel}
-          initialData={projectId ? { projectId } : undefined}
+          initialData={currentProjectId ? { projectId: currentProjectId } : undefined}
         />
       </div>
     </AppLayout>

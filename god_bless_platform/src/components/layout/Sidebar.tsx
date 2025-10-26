@@ -221,15 +221,15 @@ export function Sidebar({ isCollapsed, onToggle: _onToggle, className = '' }: Si
   }
 
   return (
-    <div 
+    <div
       className={`
-        fixed left-0 top-0 h-full bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 shadow-sm z-40 transition-all duration-300
+        fixed left-0 top-0 h-full theme-surface border-r theme-border shadow-sm z-40 transition-all duration-300
         ${isCollapsed ? 'w-16' : 'w-64'}
         ${className}
       `}
     >
       {/* Logo/Brand */}
-      <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between h-16 px-4 border-b theme-border">
         {!isCollapsed && (
           <div className="flex items-center">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -256,7 +256,7 @@ export function Sidebar({ isCollapsed, onToggle: _onToggle, className = '' }: Si
 
       {/* User Info */}
       {user && (
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+        <div className="border-t theme-border p-4">
           <div className={`flex items-center ${isCollapsed ? 'justify-center' : ''}`}>
             <div className="w-8 h-8 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">

@@ -9,6 +9,7 @@ import { AppLayout } from '../../components/layout'
 import { Button } from '../../components/common'
 import { CampaignList, DeliveryReport } from '../../components/sms'
 import { smsService } from '../../services'
+import { useProject } from '../../contexts'
 import type { BreadcrumbItem, Campaign } from '../../types'
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -37,8 +38,14 @@ interface DashboardStats {
 export function CampaignsPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const projectId = searchParams.get('project')
-  
+  const requestedProjectId = searchParams.get('project')
+
+  const {
+    currentProjectId,
+    selectProject,
+    isReady: isProjectReady
+  } = useProject()
+
   const [dashboardStats, setDashboardStats] = useState<DashboardStats | null>(null)
   const [selectedCampaign, setSelectedCampaign] = useState<Campaign | null>(null)
   const [showDeliveryReport, setShowDeliveryReport] = useState(false)
@@ -47,6 +54,16 @@ export function CampaignsPage() {
   useEffect(() => {
     loadDashboardStats()
   }, [])
+
+  useEffect(() => {
+    if (!requestedProjectId || !isProjectReady) {
+      return
+    }
+
+    if (requestedProjectId !== currentProjectId) {
+      void selectProject(requestedProjectId)
+    }
+  }, [requestedProjectId, currentProjectId, isProjectReady, selectProject])
 
   const loadDashboardStats = async () => {
     setIsLoading(true)
@@ -63,8 +80,7 @@ export function CampaignsPage() {
   }
 
   const handleCreateCampaign = () => {
-    const url = projectId ? `/sms/create?project=${projectId}` : '/sms/create'
-    navigate(url)
+    navigate('/sms/create')
   }
 
   const handleCampaignClick = (campaign: Campaign) => {
@@ -81,8 +97,7 @@ export function CampaignsPage() {
   }
 
   const handleBulkSMS = () => {
-    const url = projectId ? `/sms/bulk?project=${projectId}` : '/sms/bulk'
-    navigate(url)
+    navigate('/sms/bulk')
   }
 
   return (
@@ -166,7 +181,7 @@ export function CampaignsPage() {
 
         {/* Campaign List */}
         <CampaignList
-          projectId={projectId || undefined}
+          projectId={currentProjectId || undefined}
           onCampaignClick={handleCampaignClick}
           onCampaignEdit={handleCampaignEdit}
           onCampaignReport={handleCampaignReport}
