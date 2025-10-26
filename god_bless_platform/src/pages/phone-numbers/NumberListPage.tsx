@@ -8,9 +8,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { NumberList, FilterPanel, ExportDialog } from '../../components/phone-numbers'
 import { Card, Button, Modal } from '../../components/common'
-import { projectService, phoneNumberService } from '../../services'
+import { phoneNumberService } from '../../services'
+import { useProject } from '../../contexts'
 import type { BreadcrumbItem } from '../../types/ui'
-import type { Project, NumberFilters } from '../../types'
+import type { NumberFilters } from '../../types'
 
 const breadcrumbs: BreadcrumbItem[] = [
   {
@@ -34,17 +35,25 @@ const breadcrumbs: BreadcrumbItem[] = [
 export function NumberListPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
-  const projectId = searchParams.get('project')
+  const requestedProjectId = searchParams.get('project')
+
+  const {
+    currentProject,
+    currentProjectId,
+    isReady: isProjectReady,
+    isLoading: isProjectLoading,
+    error: projectContextError,
+    selectProject,
+    refreshCurrentProject
+  } = useProject()
 
   // State
-  const [project, setProject] = useState<Project | null>(null)
-  const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
-  
+
   // Filter and export state
   const [filters, setFilters] = useState<NumberFilters>({
-    projectId: projectId || undefined
+    projectId: currentProjectId || undefined
   })
   const [showFilters, setShowFilters] = useState<boolean>(false)
   const [showExportDialog, setShowExportDialog] = useState<boolean>(false)
@@ -57,50 +66,50 @@ export function NumberListPage() {
   const [availableCountries, setAvailableCountries] = useState<string[]>([])
   const [availableLineTypes, setAvailableLineTypes] = useState<string[]>([])
 
-  // Load project data
   useEffect(() => {
-    const loadProject = async () => {
-      if (!projectId) {
-        // Redirect to main phone numbers page for project selection
-        navigate('/phone-numbers?redirected=true')
-        return
-      }
-
-      try {
-        setIsLoading(true)
-        const response = await projectService.getProject(projectId)
-        
-        if (response.success) {
-          setProject(response.data)
-          setFilters(prev => ({ ...prev, projectId }))
-        } else {
-          setError('Failed to load project details')
-        }
-      } catch (err) {
-        console.error('Failed to load project:', err)
-        setError('Failed to load project details')
-      } finally {
-        setIsLoading(false)
-      }
+    if (!isProjectReady) {
+      return
     }
 
-    loadProject()
-  }, [projectId, navigate])
-
-  // Update URL when filters change
-  useEffect(() => {
-    if (filters.projectId) {
-      const newSearchParams = new URLSearchParams(searchParams)
-      newSearchParams.set('project', filters.projectId)
-      
-      // Add other filter params to URL if needed
-      if (filters.search) newSearchParams.set('search', filters.search)
-      if (filters.isValid !== undefined) newSearchParams.set('valid', filters.isValid.toString())
-      if (filters.carrier) newSearchParams.set('carrier', filters.carrier)
-      
-      setSearchParams(newSearchParams)
+    if (requestedProjectId && requestedProjectId !== currentProjectId) {
+      void selectProject(requestedProjectId)
+      return
     }
-  }, [filters, searchParams, setSearchParams])
+
+    if (!currentProjectId) {
+      navigate('/phone-numbers?redirected=true')
+    }
+  }, [isProjectReady, requestedProjectId, currentProjectId, selectProject, navigate])
+
+  useEffect(() => {
+    setFilters(prev => {
+      const desiredProjectId = currentProjectId || undefined
+      if (prev.projectId === desiredProjectId) {
+        return prev
+      }
+      return { ...prev, projectId: desiredProjectId }
+    })
+  }, [currentProjectId])
+
+  useEffect(() => {
+    if (!isProjectReady) {
+      return
+    }
+
+    const params = new URLSearchParams()
+
+    if (filters.search) params.set('search', filters.search)
+    if (filters.isValid !== undefined) params.set('valid', filters.isValid.toString())
+    if (filters.carrier) params.set('carrier', filters.carrier)
+    if (filters.country) params.set('country', filters.country)
+    if (filters.lineType) params.set('lineType', filters.lineType)
+    if (filters.ordering) params.set('ordering', filters.ordering)
+    if (filters.page) params.set('page', String(filters.page))
+    if (filters.pageSize) params.set('pageSize', String(filters.pageSize))
+    if (currentProjectId) params.set('project', currentProjectId)
+
+    setSearchParams(params, { replace: true })
+  }, [filters, currentProjectId, isProjectReady, setSearchParams])
 
   const handleFiltersChange = (newFilters: NumberFilters) => {
     setFilters(newFilters)
@@ -113,7 +122,7 @@ export function NumberListPage() {
 
   const handleClearFilters = () => {
     setFilters({
-      projectId: projectId || undefined
+      projectId: currentProjectId || undefined
     })
   }
 
@@ -149,24 +158,20 @@ export function NumberListPage() {
   }
 
   const handleDeleteAllNumbers = async () => {
-    if (!project?.id) return
+    if (!currentProjectId) return
+
+    const totalBeforeDelete = currentProject?.phone_stats?.total || 0
 
     try {
       setIsDeletingAll(true)
-      const response = await phoneNumberService.deleteAllNumbers(project.id)
+      const response = await phoneNumberService.deleteAllNumbers(currentProjectId)
 
       if (response.success) {
-        setSuccessMessage(`Successfully deleted all ${project.phone_stats?.total || 0} phone numbers`)
+        setSuccessMessage(`Successfully deleted all ${totalBeforeDelete} phone numbers`)
         setShowDeleteAllModal(false)
 
-        // Reload project data to update stats
-        const projectResponse = await projectService.getProject(project.id)
-        if (projectResponse.success) {
-          setProject(projectResponse.data)
-        }
+        await refreshCurrentProject()
 
-        // Force reload of the NumberList component by updating a key prop or state
-        // This will trigger the NumberList to reload its data
         setFilters(prev => ({ ...prev, _reload: Date.now() }))
       } else {
         handleError(response.message || 'Failed to delete all numbers')
@@ -214,7 +219,9 @@ export function NumberListPage() {
     }
   }
 
-  if (isLoading) {
+  const isProjectSelectionLoading = !isProjectReady || (isProjectLoading && !currentProject)
+
+  if (isProjectSelectionLoading) {
     return (
       <AppLayout breadcrumbs={breadcrumbs}>
         <div className="flex items-center justify-center min-h-64">
@@ -224,7 +231,7 @@ export function NumberListPage() {
     )
   }
 
-  if (!project) {
+  if (!currentProject) {
     return (
       <AppLayout breadcrumbs={breadcrumbs}>
         <Card className="p-8 text-center">
@@ -235,20 +242,20 @@ export function NumberListPage() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Project Not Found</h2>
           <p className="text-gray-600 mb-6">
-            {error || 'The selected project could not be found or you do not have access to it.'}
+            {projectContextError || error || 'Select a project to view and manage phone numbers.'}
           </p>
           <div className="flex justify-center gap-3">
             <button
-              onClick={() => navigate('/projects')}
+              onClick={() => navigate('/phone-numbers')}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              Select Project
+              Go to Phone Numbers
             </button>
             <button
-              onClick={() => navigate('/phone-numbers')}
+              onClick={() => navigate('/projects')}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
             >
-              Back to Phone Numbers
+              Manage Projects
             </button>
           </div>
         </Card>
@@ -264,7 +271,7 @@ export function NumberListPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Phone Numbers</h1>
             <p className="text-gray-600 mt-1">
-              Manage phone numbers for project "{project.project_name}"
+              Manage phone numbers for project "{currentProject.project_name}"
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -296,12 +303,12 @@ export function NumberListPage() {
               variant="danger"
               size="sm"
               onClick={() => setShowDeleteAllModal(true)}
-              disabled={!project?.phone_stats?.total || project.phone_stats.total === 0}
+              disabled={!currentProject?.phone_stats?.total || currentProject.phone_stats.total === 0}
             >
               Delete All Numbers
             </Button>
             <Button
-              onClick={() => navigate(`/phone-numbers/generate?project=${projectId}`)}
+              onClick={() => navigate('/phone-numbers/generate')}
             >
               Generate Numbers
             </Button>
@@ -361,7 +368,7 @@ export function NumberListPage() {
         )}
 
         {/* Project Stats */}
-        {project.phone_stats && (
+        {currentProject.phone_stats && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card className="p-4">
               <div className="flex items-center">
@@ -375,7 +382,7 @@ export function NumberListPage() {
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-500">Total Numbers</p>
                   <p className="text-2xl font-semibold text-gray-900">
-                    {project.phone_stats.total.toLocaleString()}
+                    {currentProject.phone_stats.total.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -393,7 +400,7 @@ export function NumberListPage() {
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-500">Valid Numbers</p>
                   <p className="text-2xl font-semibold text-gray-900">
-                    {project.phone_stats.valid.toLocaleString()}
+                    {currentProject.phone_stats.valid.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -411,7 +418,7 @@ export function NumberListPage() {
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-500">Invalid Numbers</p>
                   <p className="text-2xl font-semibold text-gray-900">
-                    {project.phone_stats.invalid.toLocaleString()}
+                    {currentProject.phone_stats.invalid.toLocaleString()}
                   </p>
                 </div>
               </div>
@@ -429,8 +436,8 @@ export function NumberListPage() {
                 <div className="ml-3">
                   <p className="text-sm font-medium text-gray-500">Validation Rate</p>
                   <p className="text-2xl font-semibold text-gray-900">
-                    {project.phone_stats.total > 0 
-                      ? Math.round((project.phone_stats.valid / project.phone_stats.total) * 100)
+                    {currentProject.phone_stats.total > 0
+                      ? Math.round((currentProject.phone_stats.valid / currentProject.phone_stats.total) * 100)
                       : 0
                     }%
                   </p>
@@ -462,39 +469,35 @@ export function NumberListPage() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate(`/phone-numbers/validate?project=${projectId}`)}
+                  onClick={() => navigate('/phone-numbers/validate')}
                 >
                   Validate Numbers
                 </Button>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate(`/phone-numbers/import?project=${projectId}`)}
+                  onClick={() => navigate('/phone-numbers/import')}
                 >
                   Import Numbers
                 </Button>
               </div>
             </div>
             <div className="text-sm text-gray-500">
-              Project: {project.project_name}
+              Project: {currentProject.project_name}
             </div>
           </div>
         </Card>
 
         {/* Number List */}
         <NumberList
-          project={project}
+          project={currentProject}
           filters={filters}
           onError={handleError}
           onSuccess={handleSuccess}
           onFilterOptionsUpdate={handleFilterOptionsUpdate}
           onInternalFiltersChange={handleInternalFiltersChange}
           onProjectRefresh={async () => {
-            // Reload project data to update statistics after deletion
-            const projectResponse = await projectService.getProject(project.id)
-            if (projectResponse.success) {
-              setProject(projectResponse.data)
-            }
+            await refreshCurrentProject()
           }}
         />
 
@@ -502,7 +505,7 @@ export function NumberListPage() {
         <ExportDialog
           isOpen={showExportDialog}
           onClose={() => setShowExportDialog(false)}
-          project={project}
+          project={currentProject}
           filters={filters}
           onSuccess={(message) => {
             setSuccessMessage(message)
@@ -536,7 +539,7 @@ export function NumberListPage() {
             </div>
 
             <p className="text-gray-700 mb-6">
-              Are you sure you want to delete all {project?.phone_stats?.total?.toLocaleString() || 0} phone numbers in this project?
+              Are you sure you want to delete all {currentProject?.phone_stats?.total?.toLocaleString() || 0} phone numbers in this project?
               This will permanently remove all phone numbers and their associated data.
             </p>
 
