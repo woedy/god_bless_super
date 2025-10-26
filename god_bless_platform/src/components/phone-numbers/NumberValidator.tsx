@@ -7,7 +7,7 @@ import React, { useState, useEffect } from 'react'
 import { Button, Input, Select, Card, Textarea, ProgressBar, Badge } from '../common'
 import { phoneNumberService } from '../../services'
 import { useTaskProgress } from '../../hooks'
-import type { ValidateNumbersParams, Project } from '../../types'
+import type { ValidateNumbersParams, Project, TaskResult } from '../../types'
 
 interface NumberValidatorProps {
   project: Project
@@ -45,6 +45,7 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
   const [isValidating, setIsValidating] = useState<boolean>(false)
   const [progressMessage, setProgressMessage] = useState<string>('')
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
+  const [lastValidationResult, setLastValidationResult] = useState<TaskResult | null>(null)
 
   // Single validation state
   const [singleValidationResult, setSingleValidationResult] = useState<SingleValidationResult | null>(null)
@@ -73,11 +74,14 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
 
     if (isCompleted) {
       setIsValidating(false)
-      setProgressMessage(prev => prev || 'Validation completed successfully!')
+      setProgressMessage(prev => prev || task?.result?.message || 'Validation completed successfully!')
+      if (task?.result) {
+        setLastValidationResult(task.result)
+      }
       onValidationComplete?.(currentTaskId)
       setCurrentTaskId(null)
     }
-  }, [isCompleted, currentTaskId, onValidationComplete])
+  }, [isCompleted, currentTaskId, onValidationComplete, task?.result])
 
   useEffect(() => {
     if (!currentTaskId) {
@@ -88,6 +92,7 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
       setIsValidating(false)
       setCurrentTaskId(null)
       setProgressMessage('')
+      setLastValidationResult(null)
       const failureMessage =
         task?.error?.message ??
         taskError ??
@@ -100,6 +105,7 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
     try {
       setIsValidating(true)
       setProgressMessage('Starting phone number validation...')
+      setLastValidationResult(null)
 
       const params: ValidateNumbersParams = {
         provider,
@@ -122,10 +128,28 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
       }
 
       const response = await phoneNumberService.validateNumbers(params)
-      
-      if (response.success) {
-        setCurrentTaskId(response.data.id)
-        setProgressMessage('Validation task started...')
+
+      if (response.success && response.data) {
+        const nextTask = response.data
+
+        if (nextTask.status === 'pending' || nextTask.status === 'running') {
+          setCurrentTaskId(nextTask.id)
+          setProgressMessage(nextTask.progressMessage || 'Validation task started...')
+        } else {
+          setIsValidating(false)
+          setCurrentTaskId(null)
+          const completionMessage =
+            nextTask.progressMessage ||
+            nextTask.result?.message ||
+            (nextTask.status === 'failed'
+              ? 'Validation failed'
+              : 'Validation completed successfully!')
+          setProgressMessage(completionMessage)
+          if (nextTask.result) {
+            setLastValidationResult(nextTask.result)
+          }
+          onValidationComplete?.(nextTask.id)
+        }
       } else {
         throw new Error('Failed to start validation task')
       }
@@ -133,6 +157,7 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
       console.error('Validation failed:', error)
       setIsValidating(false)
       setProgressMessage('')
+      setLastValidationResult(null)
       onError?.(error instanceof Error ? error.message : 'Validation failed')
     }
   }
@@ -220,6 +245,62 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
           >
             Cancel
           </Button>
+        </div>
+      )}
+
+      {!isValidating && lastValidationResult && (
+        <div
+          className={`mb-6 p-4 rounded-lg border ${
+            lastValidationResult.success
+              ? 'bg-green-50 border-green-100'
+              : 'bg-red-50 border-red-100'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span
+              className={`text-sm font-medium ${
+                lastValidationResult.success ? 'text-green-900' : 'text-red-900'
+              }`}
+            >
+              {lastValidationResult.message}
+            </span>
+            {lastValidationResult.statistics && (
+              <span className="text-sm text-gray-700">
+                {lastValidationResult.statistics.successfulItems} succeeded /
+                {' '}
+                {lastValidationResult.statistics.failedItems} failed
+              </span>
+            )}
+          </div>
+
+          {lastValidationResult.statistics && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm text-gray-700">
+              <div>
+                <span className="block text-xs uppercase text-gray-500">Total</span>
+                <span className="font-semibold text-gray-900">
+                  {lastValidationResult.statistics.totalItems}
+                </span>
+              </div>
+              <div>
+                <span className="block text-xs uppercase text-gray-500">Processed</span>
+                <span className="font-semibold text-gray-900">
+                  {lastValidationResult.statistics.processedItems}
+                </span>
+              </div>
+              <div>
+                <span className="block text-xs uppercase text-gray-500">Valid</span>
+                <span className="font-semibold text-gray-900">
+                  {lastValidationResult.statistics.successfulItems}
+                </span>
+              </div>
+              <div>
+                <span className="block text-xs uppercase text-gray-500">Invalid</span>
+                <span className="font-semibold text-gray-900">
+                  {lastValidationResult.statistics.failedItems}
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -380,7 +461,7 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
           <Button
             onClick={handleBulkValidation}
             disabled={
-              isValidating || 
+              isValidating ||
               (validationType === 'manual' && getManualNumberCount() === 0)
             }
             loading={isValidating}

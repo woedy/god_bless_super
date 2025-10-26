@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
     LIST: '/phone-generator/list-numbers/',
     GENERATE: '/phone-generator/generate-numbers-enhanced/',
     VALIDATE: '/phone-validator/start-validation-free/',
+    VALIDATE_ENHANCED: '/phone-generator/validate-numbers-enhanced/',
     EXPORT: '/phone-generator/export/',
     IMPORT: '/phone-generator/import/',
     DELETE_ALL: '/phone-generator/delete-all/',
