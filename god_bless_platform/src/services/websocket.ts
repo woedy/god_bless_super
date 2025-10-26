@@ -461,6 +461,22 @@ class WebSocketManager implements IWebSocketManager {
       return false;
     }
 
+    const messageTaskId =
+      (message as Record<string, any>).taskId ||
+      (message as Record<string, any>).task_id ||
+      payload.taskId ||
+      payload.task_id;
+    if (filters.taskId && messageTaskId && messageTaskId !== filters.taskId) {
+      return false;
+    }
+
+    if (filters.taskId && !messageTaskId) {
+      console.warn(
+        "WebSocket: Received message without taskId while filtering by task",
+        message
+      );
+    }
+
     return true;
   }
 
