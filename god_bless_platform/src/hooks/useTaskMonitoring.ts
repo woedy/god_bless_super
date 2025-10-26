@@ -758,6 +758,7 @@ export function useTaskProgress(
   const pollingIntervalRef = useRef<number | null>(null);
   const lastTaskIdRef = useRef<ID | null>(null);
   const initialFetchTimeoutRef = useRef<number | null>(null);
+  const completionRefreshTimeoutRef = useRef<number | null>(null);
 
   const pollInterval = options.pollInterval ?? 5000;
 
@@ -857,6 +858,10 @@ export function useTaskProgress(
       clearTimeout(initialFetchTimeoutRef.current);
       initialFetchTimeoutRef.current = null;
     }
+    if (completionRefreshTimeoutRef.current) {
+      clearTimeout(completionRefreshTimeoutRef.current);
+      completionRefreshTimeoutRef.current = null;
+    }
 
     if (taskId) {
       initialFetchTimeoutRef.current = window.setTimeout(() => {
@@ -869,6 +874,10 @@ export function useTaskProgress(
       if (initialFetchTimeoutRef.current) {
         clearTimeout(initialFetchTimeoutRef.current);
         initialFetchTimeoutRef.current = null;
+      }
+      if (completionRefreshTimeoutRef.current) {
+        clearTimeout(completionRefreshTimeoutRef.current);
+        completionRefreshTimeoutRef.current = null;
       }
     };
   }, [taskId, fetchTaskStatus, clearPolling]);
@@ -914,6 +923,21 @@ export function useTaskProgress(
     [mergeTaskUpdate, taskId]
   );
 
+  const scheduleCompletionRefresh = useCallback(() => {
+    if (!taskId) {
+      return;
+    }
+
+    if (completionRefreshTimeoutRef.current) {
+      clearTimeout(completionRefreshTimeoutRef.current);
+    }
+
+    completionRefreshTimeoutRef.current = window.setTimeout(() => {
+      fetchTaskStatus();
+      completionRefreshTimeoutRef.current = null;
+    }, 300);
+  }, [fetchTaskStatus, taskId]);
+
   const handleCompletionMessage = useCallback(
     (message: WebSocketMessage<TaskCompleteMessage>) => {
       if (!taskId || message.data.taskId !== taskId) {
@@ -930,9 +954,9 @@ export function useTaskProgress(
         actualDuration: message.data.duration,
       });
       setError(null);
-      clearPolling();
+      scheduleCompletionRefresh();
     },
-    [clearPolling, mergeTaskUpdate, taskId]
+    [mergeTaskUpdate, scheduleCompletionRefresh, taskId]
   );
 
   // WebSocket subscriptions
