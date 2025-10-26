@@ -208,7 +208,9 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
   const uniqueTypes = Array.from(new Set(activities.map(a => a.type)))
 
   return (
-    <div className={`activity-feed bg-white rounded-lg border border-gray-200 ${className}`}>
+    <div
+      className={`activity-feed bg-white rounded-lg border border-gray-200 overflow-hidden flex flex-col ${className}`}
+    >
       {/* Header */}
       <div className="p-4 border-b border-gray-200">
         <div className="flex items-center justify-between mb-4">
@@ -283,7 +285,7 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
       </div>
 
       {/* Activity List */}
-      <div className="max-h-96 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {filteredActivities.length === 0 ? (
           <div className="p-8 text-center">
             <div className="text-gray-400 mb-2">
@@ -315,13 +317,13 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({
                           {formatTimestamp(activity.timestamp)}
                         </p>
                       </div>
-                      <p className="text-sm text-gray-600 mt-1">
+                      <p className="text-sm text-gray-600 mt-1 break-words">
                         {activity.message}
                       </p>
                       {activity.metadata && Object.keys(activity.metadata).length > 0 && (
-                        <div className="mt-2 text-xs text-gray-500">
+                        <div className="mt-2 text-xs text-gray-500 break-words">
                           {Object.entries(activity.metadata).map(([key, value]) => (
-                            <span key={key} className="mr-3">
+                            <span key={key} className="mr-3 break-all">
                               {key}: {String(value)}
                             </span>
                           ))}

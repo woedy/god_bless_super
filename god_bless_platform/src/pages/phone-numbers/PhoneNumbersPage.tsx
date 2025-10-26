@@ -8,6 +8,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { Button, Card, Select, Badge } from '../../components/common'
 import { projectService, phoneNumberService } from '../../services'
+import { useProject } from '../../contexts'
 import type { BreadcrumbItem } from '../../types/ui'
 import type { Project, PhoneNumber } from '../../types'
 
@@ -79,11 +80,19 @@ export function PhoneNumbersPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const redirected = searchParams.get('redirected')
-  
+  const requestedProjectId = searchParams.get('project')
+
+  const {
+    currentProjectId,
+    currentProject,
+    selectProject,
+    isReady: isProjectReady,
+    isLoading: isProjectLoading
+  } = useProject()
+
   // State
   const [projects, setProjects] = useState<Project[]>([])
-  const [selectedProject, setSelectedProject] = useState<string>('')
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [isLoadingProjects, setIsLoadingProjects] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [showRedirectMessage, setShowRedirectMessage] = useState<boolean>(false)
   const [recentNumbers, setRecentNumbers] = useState<PhoneNumber[]>([])
@@ -101,24 +110,32 @@ export function PhoneNumbersPage() {
     }
   }, [redirected, searchParams, navigate])
 
+  useEffect(() => {
+    if (!isProjectReady) {
+      return
+    }
+
+    if (requestedProjectId) {
+      if (requestedProjectId !== currentProjectId) {
+        void selectProject(requestedProjectId)
+      }
+      return
+    }
+
+    if (!currentProjectId && projects.length > 0) {
+      void selectProject(projects[0])
+    }
+  }, [isProjectReady, requestedProjectId, currentProjectId, projects, selectProject])
+
   // Load projects
   useEffect(() => {
     const loadProjects = async () => {
       try {
-        setIsLoading(true)
+        setIsLoadingProjects(true)
         const response = await projectService.getProjects()
-        
+
         if (response.success) {
           setProjects(response.data.results)
-          
-          // Try to restore last selected project from localStorage
-          const lastSelectedProject = localStorage.getItem('lastSelectedProject')
-          if (lastSelectedProject && response.data.results.find(p => p.id === lastSelectedProject)) {
-            setSelectedProject(lastSelectedProject)
-          } else if (response.data.results.length > 0) {
-            // Auto-select first project if no saved project or saved project not found
-            setSelectedProject(response.data.results[0].id)
-          }
         } else {
           setError('Failed to load projects')
         }
@@ -126,7 +143,7 @@ export function PhoneNumbersPage() {
         console.error('Failed to load projects:', err)
         setError('Failed to load projects')
       } finally {
-        setIsLoading(false)
+        setIsLoadingProjects(false)
       }
     }
 
@@ -163,15 +180,15 @@ export function PhoneNumbersPage() {
 
   // Load recent numbers when project changes
   useEffect(() => {
-    if (selectedProject) {
-      loadRecentNumbers(selectedProject)
+    if (currentProjectId) {
+      loadRecentNumbers(currentProjectId)
     } else {
       setRecentNumbers([])
     }
-  }, [selectedProject])
+  }, [currentProjectId])
 
   const handleActionClick = (action: string) => {
-    if (!selectedProject) {
+    if (!currentProjectId) {
       setError('Please select a project first')
       return
     }
@@ -182,17 +199,21 @@ export function PhoneNumbersPage() {
 
     switch (action) {
       case 'generate':
-        navigate(`/phone-numbers/generate?project=${selectedProject}`)
+        navigate('/phone-numbers/generate')
         break
       case 'validate':
-        navigate(`/phone-numbers/validate?project=${selectedProject}`)
+        navigate('/phone-numbers/validate')
         break
       case 'list':
-        navigate(`/phone-numbers/list?project=${selectedProject}`)
+        navigate('/phone-numbers/list')
         break
       default:
         break
     }
+  }
+
+  const handleProjectChange = (projectId: string) => {
+    void selectProject(projectId)
   }
 
   const projectOptions = projects.map(project => ({
@@ -200,19 +221,15 @@ export function PhoneNumbersPage() {
     label: project.project_name
   }))
 
-  const selectedProjectData = projects.find(p => p.id === selectedProject)
+  const selectedProjectData = currentProject ?? projects.find(p => p.id === currentProjectId) ?? null
 
   // Clear error when project is selected and save to localStorage
   useEffect(() => {
-    if (selectedProject) {
-      if (error || showRedirectMessage) {
-        setError(null)
-        setShowRedirectMessage(false)
-      }
-      // Save selected project to localStorage
-      localStorage.setItem('lastSelectedProject', selectedProject)
+    if (currentProjectId && (error || showRedirectMessage)) {
+      setError(null)
+      setShowRedirectMessage(false)
     }
-  }, [selectedProject, error, showRedirectMessage])
+  }, [currentProjectId, error, showRedirectMessage])
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -226,16 +243,16 @@ export function PhoneNumbersPage() {
             </p>
           </div>
           <div className="flex space-x-3">
-            <Button 
+            <Button
               variant="outline"
               onClick={() => handleActionClick('list')}
-              disabled={!selectedProject}
+              disabled={!currentProjectId}
             >
               View Numbers
             </Button>
-            <Button 
+            <Button
               onClick={() => handleActionClick('generate')}
-              disabled={!selectedProject}
+              disabled={!currentProjectId}
             >
               Generate Numbers
             </Button>
@@ -281,7 +298,7 @@ export function PhoneNumbersPage() {
             </Button>
           </div>
           
-          {isLoading ? (
+          {isLoadingProjects ? (
             <div className="flex items-center justify-center py-8">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
             </div>
@@ -297,8 +314,8 @@ export function PhoneNumbersPage() {
               <div>
                 <Select
                   label="Choose Project"
-                  value={selectedProject}
-                  onChange={setSelectedProject}
+                  value={currentProjectId ?? ''}
+                  onChange={handleProjectChange}
                   options={projectOptions}
                   placeholder="Select a project"
                   required
@@ -378,11 +395,11 @@ export function PhoneNumbersPage() {
           <div className="p-6 border-b border-gray-200">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold text-gray-900">Recent Numbers (Last 20)</h2>
-              <Button 
-                variant="ghost" 
+              <Button
+                variant="ghost"
                 size="sm"
                 onClick={() => handleActionClick('list')}
-                disabled={!selectedProject}
+                disabled={!currentProjectId}
               >
                 View All
               </Button>
@@ -394,7 +411,7 @@ export function PhoneNumbersPage() {
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
                 <span className="ml-2 text-gray-500">Loading recent numbers...</span>
               </div>
-            ) : !selectedProject ? (
+            ) : !currentProjectId ? (
               <div className="text-center py-8">
                 <p className="text-gray-500">Select a project to view recent numbers</p>
               </div>
