@@ -65,15 +65,13 @@ class WebSocketManager implements IWebSocketManager {
    * Connect to WebSocket server
    */
   public async connect(): Promise<void> {
-    if (
-      this.ws?.readyState === WebSocket.CONNECTING ||
-      this.ws?.readyState === WebSocket.OPEN
-    ) {
+    if (this.isConnecting() || this.isConnected()) {
       console.log("WebSocket: Already connected or connecting");
       return;
     }
 
     this.isIntentionalDisconnect = false;
+    this.clearReconnectTimeout();
     this.updateConnectionState("connecting");
 
     try {
@@ -117,7 +115,14 @@ class WebSocketManager implements IWebSocketManager {
   /**
    * Disconnect from WebSocket server
    */
-  public disconnect(): void {
+  public disconnect(force = false): void {
+    if (!force && this.hasActiveSubscriptions()) {
+      console.log(
+        "WebSocket: Active subscriptions detected, keeping connection open"
+      );
+      return;
+    }
+
     console.log("WebSocket: Disconnecting");
     this.isIntentionalDisconnect = true;
     this.clearReconnectTimeout();
@@ -151,6 +156,16 @@ class WebSocketManager implements IWebSocketManager {
 
     this.subscriptions.get(channel)!.push(subscription);
     console.log(`WebSocket: Subscribed to channel '${channel}'`, filters);
+
+    // Ensure the connection is established when the first subscription is added
+    if (!this.isConnected() && !this.isConnecting()) {
+      this.connect().catch((error) => {
+        console.error(
+          "WebSocket: Failed to establish connection for subscription",
+          error
+        );
+      });
+    }
 
     // Send subscription message if connected
     if (this.isConnected()) {
@@ -403,11 +418,42 @@ class WebSocketManager implements IWebSocketManager {
   ): boolean {
     if (!filters) return true;
 
-    if (filters.userId && message.userId !== filters.userId) {
+    const payload = (message.data || {}) as Record<string, any>;
+    const messageUserId =
+      (message as Record<string, any>).userId ||
+      payload.userId ||
+      payload.user_id;
+    if (filters.userId && messageUserId && messageUserId !== filters.userId) {
       return false;
     }
 
-    if (filters.projectId && message.projectId !== filters.projectId) {
+    if (filters.userId && !messageUserId) {
+      console.warn(
+        "WebSocket: Received message without userId while filtering by user",
+        message
+      );
+    }
+
+    const messageProjectId =
+      (message as Record<string, any>).projectId ||
+      payload.projectId ||
+      payload.project_id;
+    if (filters.projectId && messageProjectId && messageProjectId !== filters.projectId) {
+      return false;
+    }
+
+    if (filters.projectId && !messageProjectId) {
+      console.warn(
+        "WebSocket: Received message without projectId while filtering by project",
+        message
+      );
+    }
+
+    const messageTaskType =
+      (message as Record<string, any>).taskType ||
+      payload.taskType ||
+      payload.type;
+    if (filters.taskType && messageTaskType && messageTaskType !== filters.taskType) {
       return false;
     }
 
@@ -415,7 +461,51 @@ class WebSocketManager implements IWebSocketManager {
       return false;
     }
 
+    const messageTaskId =
+      (message as Record<string, any>).taskId ||
+      (message as Record<string, any>).task_id ||
+      payload.taskId ||
+      payload.task_id;
+    if (filters.taskId && messageTaskId && messageTaskId !== filters.taskId) {
+      return false;
+    }
+
+    if (filters.taskId && !messageTaskId) {
+      console.warn(
+        "WebSocket: Received message without taskId while filtering by task",
+        message
+      );
+    }
+
     return true;
+  }
+
+  /**
+   * Determine if there are active channel subscriptions
+   */
+  private hasActiveSubscriptions(): boolean {
+    if (this.subscriptions.size === 0) {
+      return false;
+    }
+
+    for (const subscriptions of this.subscriptions.values()) {
+      if (subscriptions.length > 0) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Check if WebSocket is currently connecting or reconnecting
+   */
+  private isConnecting(): boolean {
+    if (this.ws?.readyState === WebSocket.CONNECTING) {
+      return true;
+    }
+
+    return this.connectionState.status === "connecting";
   }
 
   /**

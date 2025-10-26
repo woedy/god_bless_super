@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button, Input, Select, Card, Textarea, ProgressBar, Badge } from '../common'
 import { phoneNumberService } from '../../services'
-import { websocketManager } from '../../services'
+import { useTaskProgress } from '../../hooks'
 import type { ValidateNumbersParams, Project } from '../../types'
 
 interface NumberValidatorProps {
@@ -43,7 +43,6 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
 
   // UI state
   const [isValidating, setIsValidating] = useState<boolean>(false)
-  const [progress, setProgress] = useState<number>(0)
   const [progressMessage, setProgressMessage] = useState<string>('')
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
 
@@ -51,55 +50,55 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
   const [singleValidationResult, setSingleValidationResult] = useState<SingleValidationResult | null>(null)
   const [isValidatingSingle, setIsValidatingSingle] = useState<boolean>(false)
 
-  // WebSocket task progress monitoring
+  const {
+    task,
+    progress,
+    progressMessage: taskProgressMessage,
+    isCompleted,
+    isFailed,
+    isCancelled,
+    error: taskError
+  } = useTaskProgress(currentTaskId)
+
   useEffect(() => {
-    if (currentTaskId) {
-      const handleTaskProgress = (message: { data?: any; [key: string]: any }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setProgress(data.progress || 0)
-          setProgressMessage(data.message || data.progressMessage || '')
-        }
-      }
-
-      const handleTaskComplete = (message: { data?: any; [key: string]: any }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setIsValidating(false)
-          setProgress(100)
-          setProgressMessage('Validation completed successfully!')
-          setCurrentTaskId(null)
-          onValidationComplete?.(currentTaskId)
-        }
-      }
-
-      const handleTaskError = (message: { data?: any; [key: string]: unknown }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setIsValidating(false)
-          setProgress(0)
-          setProgressMessage('')
-          setCurrentTaskId(null)
-          onError?.(data.error || 'Validation failed')
-        }
-      }
-
-      const unsubscribeProgress = websocketManager.subscribe('task_progress', handleTaskProgress)
-      const unsubscribeComplete = websocketManager.subscribe('task_complete', handleTaskComplete)
-      const unsubscribeError = websocketManager.subscribe('task_error', handleTaskError)
-
-      return () => {
-        unsubscribeProgress()
-        unsubscribeComplete()
-        unsubscribeError()
-      }
+    if (taskProgressMessage) {
+      setProgressMessage(taskProgressMessage)
     }
-  }, [currentTaskId, onValidationComplete, onError])
+  }, [taskProgressMessage])
+
+  useEffect(() => {
+    if (!currentTaskId) {
+      return
+    }
+
+    if (isCompleted) {
+      setIsValidating(false)
+      setProgressMessage(prev => prev || 'Validation completed successfully!')
+      onValidationComplete?.(currentTaskId)
+      setCurrentTaskId(null)
+    }
+  }, [isCompleted, currentTaskId, onValidationComplete])
+
+  useEffect(() => {
+    if (!currentTaskId) {
+      return
+    }
+
+    if (isFailed || isCancelled) {
+      setIsValidating(false)
+      setCurrentTaskId(null)
+      setProgressMessage('')
+      const failureMessage =
+        task?.error?.message ??
+        taskError ??
+        (isCancelled ? 'Validation was cancelled' : 'Validation failed')
+      onError?.(failureMessage)
+    }
+  }, [isFailed, isCancelled, taskError, task?.error?.message, currentTaskId, onError])
 
   const handleBulkValidation = async () => {
     try {
       setIsValidating(true)
-      setProgress(0)
       setProgressMessage('Starting phone number validation...')
 
       const params: ValidateNumbersParams = {
@@ -133,7 +132,6 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
     } catch (error) {
       console.error('Validation failed:', error)
       setIsValidating(false)
-      setProgress(0)
       setProgressMessage('')
       onError?.(error instanceof Error ? error.message : 'Validation failed')
     }
@@ -166,7 +164,6 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
 
   const handleCancel = () => {
     setIsValidating(false)
-    setProgress(0)
     setProgressMessage('')
     setCurrentTaskId(null)
   }
@@ -208,7 +205,7 @@ export const NumberValidator: React.FC<NumberValidatorProps> = ({
               Validating Numbers...
             </span>
             <span className="text-sm text-blue-700">
-              {progress}%
+              {Math.round(progress)}%
             </span>
           </div>
           <ProgressBar progress={progress} className="mb-2" />

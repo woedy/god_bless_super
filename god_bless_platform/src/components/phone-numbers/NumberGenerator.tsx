@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react'
 import { Button, Input, Select, Card, Checkbox, ProgressBar } from '../common'
 import { phoneNumberService } from '../../services'
-import { websocketManager } from '../../services'
+import { useTaskProgress } from '../../hooks'
 import type { GenerateNumbersParams, Project } from '../../types'
 
 interface NumberGeneratorProps {
@@ -45,7 +45,6 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
 
   // UI state
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
-  const [progress, setProgress] = useState<number>(0)
   const [progressMessage, setProgressMessage] = useState<string>('')
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
 
@@ -115,52 +114,54 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
     }
   }, [selectedCarrier, carriers])
 
-  // WebSocket task progress monitoring
+  const {
+    task,
+    progress,
+    progressMessage: taskProgressMessage,
+    isCompleted,
+    isFailed,
+    isCancelled,
+    error: taskError
+  } = useTaskProgress(currentTaskId)
+
+  // Sync WebSocket progress message into local state for display
   useEffect(() => {
-    if (currentTaskId) {
-      const handleTaskProgress = (message: { data?: any; [key: string]: any }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setProgress(data.progress || 0)
-          setProgressMessage(data.message || data.progressMessage || '')
-        }
-      }
-
-      const handleTaskComplete = (message: { data?: any; [key: string]: any }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setIsGenerating(false)
-          setProgress(100)
-          setProgressMessage('Generation completed successfully!')
-          setCurrentTaskId(null)
-          onGenerationComplete?.(currentTaskId)
-        }
-      }
-
-      const handleTaskError = (message: { data?: any; [key: string]: any }) => {
-        const data = message.data || message
-        if (data.task_id === currentTaskId || data.taskId === currentTaskId) {
-          setIsGenerating(false)
-          setProgress(0)
-          setProgressMessage('')
-          setCurrentTaskId(null)
-          onError?.(data.error || 'Generation failed')
-        }
-      }
-
-      const unsubscribeProgress = websocketManager.subscribe('task_progress', handleTaskProgress)
-      const unsubscribeComplete = websocketManager.subscribe('task_complete', handleTaskComplete)
-      const unsubscribeError = websocketManager.subscribe('task_error', handleTaskError)
-
-      return () => {
-        unsubscribeProgress()
-        unsubscribeComplete()
-        unsubscribeError()
-      }
+    if (taskProgressMessage) {
+      setProgressMessage(taskProgressMessage)
     }
-  }, [currentTaskId, onGenerationComplete, onError])
+  }, [taskProgressMessage])
 
+  // Handle task completion
+  useEffect(() => {
+    if (!currentTaskId) {
+      return
+    }
 
+    if (isCompleted) {
+      setIsGenerating(false)
+      setProgressMessage(prev => prev || 'Generation completed successfully!')
+      onGenerationComplete?.(currentTaskId)
+      setCurrentTaskId(null)
+    }
+  }, [isCompleted, currentTaskId, onGenerationComplete])
+
+  // Handle task failure or cancellation
+  useEffect(() => {
+    if (!currentTaskId) {
+      return
+    }
+
+    if (isFailed || isCancelled) {
+      setIsGenerating(false)
+      setCurrentTaskId(null)
+      setProgressMessage('')
+      const failureMessage =
+        task?.error?.message ??
+        taskError ??
+        (isCancelled ? 'Generation was cancelled' : 'Generation failed')
+      onError?.(failureMessage)
+    }
+  }, [isFailed, isCancelled, taskError, task?.error?.message, currentTaskId, onError])
 
   const handleGenerate = async () => {
     if (!selectedCountry) {
@@ -175,7 +176,6 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
 
     try {
       setIsGenerating(true)
-      setProgress(0)
       setProgressMessage('Starting phone number generation...')
 
       const params: GenerateNumbersParams = {
@@ -190,7 +190,7 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
       }
 
       const response = await phoneNumberService.generateNumbers(params)
-      
+
       if (response.success) {
         setCurrentTaskId(response.data.id)
         setProgressMessage('Generation task started...')
@@ -200,7 +200,6 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
     } catch (error) {
       console.error('Generation failed:', error)
       setIsGenerating(false)
-      setProgress(0)
       setProgressMessage('')
       onError?.(error instanceof Error ? error.message : 'Generation failed')
     }
@@ -208,7 +207,6 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
 
   const handleCancel = () => {
     setIsGenerating(false)
-    setProgress(0)
     setProgressMessage('')
     setCurrentTaskId(null)
   }
@@ -246,7 +244,7 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
               Generating Numbers...
             </span>
             <span className="text-sm text-blue-700">
-              {progress}%
+              {Math.round(progress)}%
             </span>
           </div>
           <ProgressBar progress={progress} className="mb-2" />
