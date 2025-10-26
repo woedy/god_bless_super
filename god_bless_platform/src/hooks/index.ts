@@ -6,6 +6,9 @@
 export { useProjects } from './useProjects'
 export type { default as UseProjectsReturn } from './useProjects'
 
+// Project context hooks
+export { useProject } from '../contexts/ProjectContext'
+
 // WebSocket hooks
 export { 
   useWebSocket, 

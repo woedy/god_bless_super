@@ -40,13 +40,19 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         timeRange: '24h',
         ...filters
       })
-      
+
       if (response.success) {
-        console.log('Dashboard data received:', response.data)
-        setMetrics(response.data)
+        const payload = (response.data as any)?.data ?? response.data
+
+        if (payload) {
+          console.log('Dashboard data received:', payload)
+          setMetrics(payload as DashboardMetrics)
+        } else {
+          setError('Dashboard response did not include metrics data')
+        }
         setLastUpdated(new Date())
       } else {
-        setError('Failed to load dashboard metrics')
+        setError(response.message || 'Failed to load dashboard metrics')
       }
     } catch (err) {
       console.error('Error loading dashboard metrics:', err)
