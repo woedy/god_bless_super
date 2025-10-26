@@ -7,7 +7,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { apiClient } from "../services/api";
 import { useWebSocketSubscription } from "./useWebSocket";
 import { WS_CHANNELS } from "../types/websocket";
-import { config } from "../config";
+import { API_ENDPOINTS, config } from "../config";
 import type { Task, TaskStatus, TaskType, ID } from "../types/models";
 import type {
   TaskProgressMessage,
@@ -225,7 +225,10 @@ export function useTaskMonitoring(options: TaskMonitoringOptions = {}) {
         "🔍 API Call Debug - Endpoint: /tasks/user/, Base URL:",
         config.apiUrl
       );
-      const response = await apiClient.get<Task[]>("/tasks/user/", params);
+      const response = await apiClient.get<Task[]>(
+        API_ENDPOINTS.TASKS.USER,
+        params
+      );
 
       if (response.success) {
         setState((prevState) => {
@@ -331,7 +334,9 @@ export function useTaskMonitoring(options: TaskMonitoringOptions = {}) {
   // Retry a failed task
   const retryTask = useCallback(async (taskId: ID): Promise<void> => {
     try {
-      const response = await apiClient.post(`/tasks/${taskId}/retry/`);
+      const response = await apiClient.post(
+        API_ENDPOINTS.TASKS.RETRY(taskId)
+      );
       if (response.success) {
         // Task will be updated via WebSocket
         console.log(`Task ${taskId} retry initiated`);
@@ -345,7 +350,9 @@ export function useTaskMonitoring(options: TaskMonitoringOptions = {}) {
   // Cancel a running task
   const cancelTask = useCallback(async (taskId: ID): Promise<void> => {
     try {
-      const response = await apiClient.post(`/tasks/${taskId}/cancel/`);
+      const response = await apiClient.post(
+        API_ENDPOINTS.TASKS.CANCEL(taskId)
+      );
       if (response.success) {
         // Task will be updated via WebSocket
         console.log(`Task ${taskId} cancellation initiated`);
@@ -399,123 +406,213 @@ export function useTaskMonitoring(options: TaskMonitoringOptions = {}) {
 /**
  * Hook for monitoring a specific task
  */
-export function useTaskProgress(taskId: ID) {
+interface UseTaskProgressOptions {
+  pollInterval?: number;
+}
+
+const TERMINAL_STATUSES: TaskStatus[] = [
+  "completed",
+  "failed",
+  "cancelled",
+];
+
+export function useTaskProgress(
+  taskId?: ID | null,
+  options: UseTaskProgressOptions = {}
+) {
   const [task, setTask] = useState<Task | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const pollingIntervalRef = useRef<number | null>(null);
+  const lastTaskIdRef = useRef<ID | null>(null);
 
-  // WebSocket subscription for this specific task
-  useWebSocketSubscription<TaskProgressMessage>(
-    WS_CHANNELS.TASK_PROGRESS,
-    useCallback(
-      (message: WebSocketMessage<TaskProgressMessage>) => {
-        if (message.data.taskId === taskId) {
-          setTask((prevTask) => ({
-            ...prevTask,
-            id: message.data.taskId,
-            type: message.data.type,
-            status: message.data.status,
-            progress: message.data.progress,
-            progressMessage: message.data.progressMessage,
-            estimatedDuration: message.data.estimatedTimeRemaining,
-            // Preserve existing data
-            createdAt: prevTask?.createdAt || new Date().toISOString(),
-            userId: prevTask?.userId || "",
-            parameters: prevTask?.parameters || {},
-            retryCount: prevTask?.retryCount || 0,
-            maxRetries: prevTask?.maxRetries || 3,
-            canRetry: prevTask?.canRetry || true,
-          }));
-        }
-      },
-      [taskId]
-    ),
-    {
-      messageTypes: ["task_progress"],
-    },
-    [taskId]
-  );
+  const pollInterval = options.pollInterval ?? 5000;
 
-  // WebSocket subscription for task completion
-  useWebSocketSubscription<TaskCompleteMessage>(
-    WS_CHANNELS.TASK_COMPLETE,
-    useCallback(
-      (message: WebSocketMessage<TaskCompleteMessage>) => {
-        if (message.data.taskId === taskId) {
-          setTask((prevTask) => ({
-            ...prevTask,
-            id: message.data.taskId,
-            type: message.data.type,
-            status: message.data.status,
-            progress: 100,
-            result: message.data.result
-              ? {
-                  success: message.data.status === "completed",
-                  message:
-                    message.data.status === "completed"
-                      ? "Task completed successfully"
-                      : "Task failed",
-                  data: message.data.result,
-                }
-              : undefined,
-            error: message.data.error
-              ? {
-                  code: "TASK_ERROR",
-                  message: String(message.data.error),
-                  retryable: message.data.status !== "cancelled",
-                }
-              : undefined,
-            completedAt: new Date().toISOString(),
-            actualDuration: message.data.duration,
-            // Preserve existing data
-            createdAt: prevTask?.createdAt || new Date().toISOString(),
-            userId: prevTask?.userId || "",
-            parameters: prevTask?.parameters || {},
-            retryCount: prevTask?.retryCount || 0,
-            maxRetries: prevTask?.maxRetries || 3,
-            canRetry:
-              (prevTask?.canRetry ?? true) && message.data.status === "failed",
-          }));
-        }
-      },
-      [taskId]
-    ),
-    {
-      messageTypes: ["task_complete", "task_error", "task_cancelled"],
-    },
-    [taskId]
-  );
+  const clearPolling = useCallback(() => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+  }, []);
 
-  // Load initial task data
-  useEffect(() => {
-    const loadTask = async () => {
-      try {
+  const mergeTaskUpdate = useCallback((update: Partial<Task>) => {
+    setTask((prevTask) => {
+      const nextTask = {
+        ...prevTask,
+        ...update,
+        progress:
+          update.progress ?? prevTask?.progress ?? (update.status === "completed" ? 100 : 0),
+        progressMessage:
+          update.progressMessage ?? prevTask?.progressMessage ?? undefined,
+      } as Task;
+      return nextTask;
+    });
+  }, []);
+
+  const fetchTaskStatus = useCallback(
+    async (showLoading = false) => {
+      if (!taskId) {
+        return;
+      }
+
+      if (showLoading) {
         setIsLoading(true);
-        const response = await apiClient.get<Task>(`/tasks/${taskId}/`);
-        if (response.success) {
-          setTask(response.data);
+      }
+
+      try {
+        const response = await apiClient.get<Task>(
+          API_ENDPOINTS.TASKS.STATUS(taskId)
+        );
+
+        if (response.success && response.data) {
+          mergeTaskUpdate(response.data);
           setError(null);
         }
-      } catch (error) {
-        console.error(`Failed to load task ${taskId}:`, error);
+      } catch (err) {
+        console.error(`Failed to fetch task ${taskId}:`, err);
         setError(
-          error instanceof Error ? error.message : "Failed to load task"
+          err instanceof Error ? err.message : "Failed to load task status"
         );
       } finally {
-        setIsLoading(false);
+        if (showLoading) {
+          setIsLoading(false);
+        }
       }
-    };
+    },
+    [mergeTaskUpdate, taskId]
+  );
 
-    loadTask();
-  }, [taskId]);
+  // Reset state when taskId changes
+  useEffect(() => {
+    if (lastTaskIdRef.current === taskId) {
+      return;
+    }
+
+    lastTaskIdRef.current = taskId ?? null;
+    setTask(null);
+    setError(null);
+    setIsLoading(false);
+    clearPolling();
+
+    if (taskId) {
+      fetchTaskStatus(true);
+    }
+
+    return () => {
+      clearPolling();
+    };
+  }, [taskId, fetchTaskStatus, clearPolling]);
+
+  // Polling fallback for active tasks
+  useEffect(() => {
+    if (!taskId) {
+      clearPolling();
+      return;
+    }
+
+    if (task && TERMINAL_STATUSES.includes(task.status as TaskStatus)) {
+      clearPolling();
+      return;
+    }
+
+    clearPolling();
+    pollingIntervalRef.current = window.setInterval(() => {
+      fetchTaskStatus();
+    }, pollInterval);
+
+    return () => {
+      clearPolling();
+    };
+  }, [taskId, task?.status, fetchTaskStatus, clearPolling, pollInterval]);
+
+  const handleProgressMessage = useCallback(
+    (message: WebSocketMessage<TaskProgressMessage>) => {
+      if (!taskId || message.data.taskId !== taskId) {
+        return;
+      }
+
+      mergeTaskUpdate({
+        id: message.data.taskId,
+        type: message.data.type,
+        status: message.data.status,
+        progress: message.data.progress,
+        progressMessage: message.data.progressMessage,
+        estimatedDuration: message.data.estimatedTimeRemaining,
+      });
+      setError(null);
+    },
+    [mergeTaskUpdate, taskId]
+  );
+
+  const handleCompletionMessage = useCallback(
+    (message: WebSocketMessage<TaskCompleteMessage>) => {
+      if (!taskId || message.data.taskId !== taskId) {
+        return;
+      }
+
+      mergeTaskUpdate({
+        id: message.data.taskId,
+        type: message.data.type,
+        status: message.data.status,
+        progress: 100,
+        result: message.data.result
+          ? {
+              success: message.data.status === "completed",
+              message:
+                message.data.status === "completed"
+                  ? "Task completed successfully"
+                  : "Task failed",
+              data: message.data.result,
+            }
+          : undefined,
+        error: message.data.error
+          ? {
+              code: "TASK_ERROR",
+              message: String(message.data.error),
+              retryable: message.data.status !== "cancelled",
+            }
+          : undefined,
+        completedAt: new Date().toISOString(),
+        actualDuration: message.data.duration,
+      });
+      setError(null);
+      clearPolling();
+    },
+    [clearPolling, mergeTaskUpdate, taskId]
+  );
+
+  // WebSocket subscriptions
+  useWebSocketSubscription<TaskProgressMessage>(
+    WS_CHANNELS.TASK_PROGRESS,
+    handleProgressMessage,
+    {
+      messageTypes: ["task_progress"],
+      taskId: taskId ?? undefined,
+    },
+    [handleProgressMessage, taskId]
+  );
+
+  useWebSocketSubscription<TaskCompleteMessage>(
+    WS_CHANNELS.TASK_COMPLETE,
+    handleCompletionMessage,
+    {
+      messageTypes: ["task_complete", "task_error", "task_cancelled"],
+      taskId: taskId ?? undefined,
+    },
+    [handleCompletionMessage, taskId]
+  );
+
+  const status = task?.status as TaskStatus | undefined;
 
   return {
     task,
+    status,
     isLoading,
     error,
-    isActive: task?.status === "running" || task?.status === "pending",
-    isCompleted: task?.status === "completed",
-    isFailed: task?.status === "failed",
+    isActive: status === "running" || status === "pending",
+    isCompleted: status === "completed",
+    isFailed: status === "failed",
+    isCancelled: status === "cancelled",
     progress: task?.progress || 0,
     progressMessage: task?.progressMessage,
   };

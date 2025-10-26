@@ -25,7 +25,18 @@ export function TaskProgressMonitor({
   onComplete,
   onError
 }: TaskProgressMonitorProps) {
-  const { task, isLoading, error, isActive, isCompleted, isFailed, progress, progressMessage } = useTaskProgress(taskId)
+  const {
+    task,
+    status,
+    isLoading,
+    error,
+    isActive,
+    isCompleted,
+    isFailed,
+    isCancelled,
+    progress,
+    progressMessage
+  } = useTaskProgress(taskId)
 
   // Handle completion callback
   React.useEffect(() => {
@@ -78,7 +89,7 @@ export function TaskProgressMonitor({
   }
 
   const getStatusColor = () => {
-    switch (task.status) {
+    switch (status) {
       case 'completed':
         return 'text-green-600'
       case 'failed':
@@ -95,7 +106,7 @@ export function TaskProgressMonitor({
   }
 
   const getStatusIcon = () => {
-    switch (task.status) {
+    switch (status) {
       case 'completed':
         return (
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
@@ -118,6 +129,12 @@ export function TaskProgressMonitor({
         return (
           <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+          </svg>
+        )
+      case 'cancelled':
+        return (
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
           </svg>
         )
       default:
@@ -146,7 +163,7 @@ export function TaskProgressMonitor({
             {formatTaskType(task.type)}
           </span>
           <span className={`text-sm capitalize ${getStatusColor()}`}>
-            {task.status}
+            {status ?? 'unknown'}
           </span>
         </div>
         {showDetails && (
@@ -192,7 +209,7 @@ export function TaskProgressMonitor({
       )}
 
       {/* Error Details */}
-      {isFailed && task.error && showDetails && (
+      {(isFailed || isCancelled) && task.error && showDetails && (
         <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded">
           <p className="text-sm text-red-800 font-medium">Error:</p>
           <p className="text-sm text-red-700">{task.error.message}</p>
