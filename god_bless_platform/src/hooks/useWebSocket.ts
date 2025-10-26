@@ -68,7 +68,7 @@ export function useWebSocket() {
   }, [])
 
   const disconnect = useCallback(() => {
-    websocketManager.disconnect()
+    websocketManager.disconnect(true)
     setConnectionState(websocketManager.getConnectionState())
   }, [])
 
