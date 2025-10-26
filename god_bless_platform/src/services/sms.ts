@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './api'
+import { authService } from './auth'
 import type {
   ApiResponse,
   CreateCampaignData,
@@ -15,6 +16,7 @@ import type {
   FileUploadResponse,
   TaskActionRequest
 } from '../types'
+import type { CampaignDeliverySettings } from '../types/rotation'
 
 // SMS Campaign Service
 export class SMSService {
@@ -44,6 +46,32 @@ export class SMSService {
    */
   async updateCampaign(campaignId: string, updates: Partial<CreateCampaignData>): Promise<ApiResponse<Campaign>> {
     return apiClient.put<Campaign>(`/sms-sender/campaigns/${campaignId}/`, updates)
+  }
+
+  /**
+   * Fetch delivery settings for a campaign
+   */
+  async getCampaignDeliverySettings(campaignId: string | number): Promise<ApiResponse<CampaignDeliverySettings>> {
+    return apiClient.get<CampaignDeliverySettings>(
+      '/sms-sender/api/campaign-delivery-settings/by_campaign/',
+      { campaign_id: String(campaignId) }
+    )
+  }
+
+  /**
+   * Update delivery settings for a campaign
+   */
+  async updateCampaignDeliverySettings(
+    campaignId: string | number,
+    settings: Partial<CampaignDeliverySettings>
+  ): Promise<ApiResponse<CampaignDeliverySettings>> {
+    return apiClient.post<CampaignDeliverySettings>(
+      '/sms-sender/api/campaign-delivery-settings/update_by_campaign/',
+      {
+        campaign_id: String(campaignId),
+        ...settings
+      }
+    )
   }
 
   /**
@@ -156,6 +184,22 @@ export class SMSService {
       smtps: any[]
       providers: string[]
     }>('/sms-sender/get-smtps-providers/', { user_id: userId })
+  }
+
+  /**
+   * Get SMTP accounts for the authenticated user via the manager API
+   */
+  async getSmtpAccounts(): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>('/smtp-manager/api/')
+  }
+
+  /**
+   * Get proxy servers available to the authenticated user
+   */
+  async getProxyServers(): Promise<ApiResponse<{ proxies: any[] }>> {
+    const user = await authService.getCurrentUser()
+    const userId = user.userId || user.id
+    return apiClient.get<{ proxies: any[] }>('/proxy-server/list/', { user_id: userId })
   }
 
   /**
