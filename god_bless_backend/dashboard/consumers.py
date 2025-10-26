@@ -228,9 +228,15 @@ class TaskProgressConsumer(AsyncWebsocketConsumer):
         
         # Join user-specific task group
         self.task_group_name = f'task_user_{self.user.id}'
-        
+        self.user_group_name = f'user_{self.user.id}'
+
         await self.channel_layer.group_add(
             self.task_group_name,
+            self.channel_name
+        )
+
+        await self.channel_layer.group_add(
+            self.user_group_name,
             self.channel_name
         )
         
@@ -248,6 +254,11 @@ class TaskProgressConsumer(AsyncWebsocketConsumer):
         if hasattr(self, 'task_group_name'):
             await self.channel_layer.group_discard(
                 self.task_group_name,
+                self.channel_name
+            )
+        if hasattr(self, 'user_group_name'):
+            await self.channel_layer.group_discard(
+                self.user_group_name,
                 self.channel_name
             )
     
@@ -268,14 +279,55 @@ class TaskProgressConsumer(AsyncWebsocketConsumer):
     # Group message handlers
     async def task_progress(self, event):
         """Handle task progress messages"""
-        await self.send(text_data=json.dumps({
-            'type': 'task_progress',
-            'data': event['data']
-        }))
-    
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_progress')))
+
     async def task_complete(self, event):
         """Handle task completion messages"""
-        await self.send(text_data=json.dumps({
-            'type': 'task_complete',
-            'data': event['data']
-        }))
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_complete')))
+
+    async def task_error(self, event):
+        """Handle task error messages"""
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_error')))
+
+    def _normalize_event(self, event, default_channel):
+        channel = event.get('channel') or default_channel
+        timestamp = event.get('timestamp') or timezone.now().isoformat()
+        data = event.get('data', {}).copy()
+
+        if not data:
+            data = {
+                'taskId': event.get('task_id'),
+                'task_id': event.get('task_id'),
+                'type': event.get('task_type') or event.get('type'),
+                'status': event.get('status'),
+                'progress': event.get('progress'),
+                'currentStep': event.get('current_step'),
+                'progressMessage': event.get('current_step'),
+                'processedItems': event.get('processed_items'),
+                'totalItems': event.get('total_items'),
+                'result': event.get('result_data'),
+                'error': event.get('error_message'),
+            }
+
+        data.setdefault('taskId', data.get('task_id') or event.get('task_id'))
+        data.setdefault('task_id', data.get('taskId'))
+        data.setdefault('type', data.get('type') or event.get('task_type') or event.get('type'))
+        data.setdefault('status', event.get('status'))
+        data.setdefault('progress', event.get('progress'))
+        data.setdefault('currentStep', event.get('current_step'))
+        data.setdefault('progressMessage', data.get('currentStep'))
+        data.setdefault('processedItems', event.get('processed_items'))
+        data.setdefault('totalItems', event.get('total_items'))
+        data.setdefault('result', event.get('result_data'))
+        data.setdefault('error', event.get('error_message'))
+        data.setdefault('timestamp', timestamp)
+        data.setdefault('userId', getattr(self.user, 'user_id', None))
+
+        return {
+            'type': event.get('type'),
+            'channel': channel,
+            'data': data,
+            'task_id': data.get('task_id'),
+            'status': data.get('status'),
+            'timestamp': timestamp,
+        }

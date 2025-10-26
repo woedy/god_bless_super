@@ -1,7 +1,7 @@
 """
 Tests for phone number generation system
 """
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from unittest.mock import patch, MagicMock
 from phone_generator.models import PhoneNumber, PhoneGenerationTask
@@ -211,6 +211,81 @@ class PhoneNumberValidationTestCase(TestCase):
         
         self.assertTrue(phone.validation_attempted)
         self.assertTrue(phone.valid_number)
+
+
+class PhoneNumberGenerationAutoValidationTests(TestCase):
+    """Regression tests for generation auto-validation scoping"""
+
+    def setUp(self):
+        self.user = User.objects.create_user(
+            username='autouser',
+            email='auto@example.com',
+            password='testpass123'
+        )
+        self.project = Project.objects.create(
+            project_name='Auto Project',
+            user=self.user
+        )
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True)
+    def test_auto_validation_uses_only_current_generation_ids(self):
+        """Auto-validation should only target IDs generated in the current run."""
+        existing_phone = PhoneNumber.objects.create(
+            user=self.user,
+            project=self.project,
+            phone_number='14159999999',
+            area_code='415',
+            validation_attempted=False
+        )
+
+        number_sequence = iter([
+            "14152000001",
+            "14152000002",
+            "14152000003",
+        ])
+
+        def fake_generate(area_code, batch_size, existing_numbers):
+            batch = []
+            while len(batch) < batch_size:
+                try:
+                    batch.append(next(number_sequence))
+                except StopIteration as exc:  # pragma: no cover - safety guard
+                    raise AssertionError("Insufficient test numbers for batch generation") from exc
+            return batch
+
+        with patch('phone_generator.tasks.validate_phone_numbers_task.delay') as mock_validate, \
+                patch('phone_generator.tasks._generate_unique_numbers_batch', side_effect=fake_generate), \
+                patch.object(generate_phone_numbers_task, '_send_task_notification'), \
+                patch.object(generate_phone_numbers_task, 'update_progress') as mock_update_progress, \
+                patch.object(generate_phone_numbers_task, 'mark_started'):
+            mock_validate.return_value.id = 'auto-validation-task'
+            result = generate_phone_numbers_task.apply(
+                args=(self.user.user_id, self.project.id, '415', 3),
+                kwargs={'auto_validate': True, 'batch_size': 2},
+                throw=True
+            )
+
+        # Ensure the task completed successfully and auto-validation was triggered
+        self.assertEqual(result.get()['total_generated'], 3)
+        mock_validate.assert_called_once()
+
+        called_ids = mock_validate.call_args.kwargs['phone_ids']
+        self.assertEqual(len(called_ids), len(set(called_ids)))
+        self.assertNotIn(existing_phone.id, called_ids)
+
+        generated_ids = list(
+            PhoneNumber.objects.filter(id__in=called_ids).values_list('id', flat=True)
+        )
+        self.assertCountEqual(generated_ids, called_ids)
+
+        # Progress updates should show movement between 0 and 100
+        progress_values = [
+            kwargs.get('progress', args[0] if args else None)
+            for args, kwargs in mock_update_progress.call_args_list
+        ]
+        progress_values = [value for value in progress_values if value is not None]
+        self.assertIn(100, progress_values)
+        self.assertTrue(any(0 < value < 100 for value in progress_values))
     
     def test_validation_source_tracking(self):
         """Test that validation source is tracked"""

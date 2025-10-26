@@ -6,6 +6,7 @@ from channels.generic.websocket import AsyncWebsocketConsumer
 from channels.db import database_sync_to_async
 from django.contrib.auth import get_user_model
 from django.conf import settings
+from django.utils import timezone
 
 User = get_user_model()
 
@@ -15,15 +16,17 @@ class PhoneGenerationProgressConsumer(AsyncWebsocketConsumer):
     
     async def connect(self):
         """Handle WebSocket connection"""
-        self.user_id = self.scope['url_route']['kwargs']['user_id']
-        self.group_name = f"user_{self.user_id}"
-        
+        self.user_identifier = self.scope['url_route']['kwargs']['user_id']
+
         # Verify user exists and is authenticated
-        user = await self.get_user(self.user_id)
+        user = await self.get_user(self.user_identifier)
         if not user:
             await self.close()
             return
-        
+
+        self.user_pk = user.pk
+        self.group_name = f"user_{self.user_pk}"
+
         # Join user group
         await self.channel_layer.group_add(
             self.group_name,
@@ -35,7 +38,13 @@ class PhoneGenerationProgressConsumer(AsyncWebsocketConsumer):
         # Send connection confirmation
         await self.send(text_data=json.dumps({
             'type': 'connection_established',
-            'message': 'Connected to phone generation progress updates'
+            'channel': 'connection_status',
+            'data': {
+                'message': 'Connected to phone generation progress updates',
+                'userId': getattr(user, 'user_id', None) or str(self.user_pk),
+                'timestamp': timezone.now().isoformat(),
+            },
+            'timestamp': timezone.now().isoformat()
         }))
     
     async def disconnect(self, close_code):
@@ -73,38 +82,21 @@ class PhoneGenerationProgressConsumer(AsyncWebsocketConsumer):
     # Handler for task progress updates
     async def task_progress(self, event):
         """Send task progress update to WebSocket"""
-        await self.send(text_data=json.dumps({
-            'type': 'task_progress',
-            'task_id': event['task_id'],
-            'status': event['status'],
-            'progress': event['progress'],
-            'current_step': event['current_step'],
-            'processed_items': event['processed_items'],
-            'total_items': event['total_items'],
-            'timestamp': event.get('timestamp')
-        }))
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_progress')))
     
     # Handler for task completion
     async def task_completed(self, event):
         """Send task completion notification to WebSocket"""
-        await self.send(text_data=json.dumps({
-            'type': 'task_completed',
-            'task_id': event['task_id'],
-            'status': event['status'],
-            'result_data': event.get('result_data', {}),
-            'error_message': event.get('error_message'),
-            'timestamp': event.get('timestamp')
-        }))
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_complete')))
     
     # Handler for task started
     async def task_started(self, event):
         """Send task started notification to WebSocket"""
-        await self.send(text_data=json.dumps({
-            'type': 'task_started',
-            'task_id': event['task_id'],
-            'task_name': event.get('task_name'),
-            'timestamp': event.get('timestamp')
-        }))
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_progress')))
+
+    async def task_failed(self, event):
+        """Send task failure notification to WebSocket"""
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_error')))
     
     @database_sync_to_async
     def get_user(self, user_id):
@@ -114,21 +106,67 @@ class PhoneGenerationProgressConsumer(AsyncWebsocketConsumer):
         except User.DoesNotExist:
             return None
 
+    def _normalize_event(self, event, default_channel):
+        """Normalize event payload for frontend consumption"""
+        channel = event.get('channel') or default_channel
+        timestamp = event.get('timestamp') or timezone.now().isoformat()
+        data = event.get('data', {}).copy()
+
+        if not data:
+            data = {
+                'taskId': event.get('task_id'),
+                'task_id': event.get('task_id'),
+                'type': event.get('task_type') or event.get('type'),
+                'status': event.get('status'),
+                'progress': event.get('progress'),
+                'currentStep': event.get('current_step'),
+                'progressMessage': event.get('current_step'),
+                'processedItems': event.get('processed_items'),
+                'totalItems': event.get('total_items'),
+                'result': event.get('result_data'),
+                'error': event.get('error_message'),
+            }
+
+        data.setdefault('taskId', data.get('task_id') or event.get('task_id'))
+        data.setdefault('task_id', data.get('taskId'))
+        data.setdefault('type', data.get('type') or event.get('task_type') or event.get('type'))
+        data.setdefault('status', event.get('status'))
+        data.setdefault('progress', event.get('progress'))
+        data.setdefault('currentStep', event.get('current_step'))
+        data.setdefault('progressMessage', data.get('currentStep'))
+        data.setdefault('processedItems', event.get('processed_items'))
+        data.setdefault('totalItems', event.get('total_items'))
+        data.setdefault('result', event.get('result_data'))
+        data.setdefault('error', event.get('error_message'))
+        data.setdefault('timestamp', timestamp)
+        data.setdefault('userId', getattr(self, 'user_identifier', None))
+
+        return {
+            'type': event.get('type'),
+            'channel': channel,
+            'data': data,
+            'task_id': data.get('task_id'),
+            'status': data.get('status'),
+            'timestamp': timestamp,
+        }
+
 
 class TaskProgressConsumer(AsyncWebsocketConsumer):
     """Generic WebSocket consumer for all task progress updates"""
     
     async def connect(self):
         """Handle WebSocket connection"""
-        self.user_id = self.scope['url_route']['kwargs']['user_id']
-        self.group_name = f"user_{self.user_id}"
-        
+        self.user_identifier = self.scope['url_route']['kwargs']['user_id']
+
         # Verify user exists
-        user = await self.get_user(self.user_id)
+        user = await self.get_user(self.user_identifier)
         if not user:
             await self.close()
             return
-        
+
+        self.user_pk = user.pk
+        self.group_name = f"user_{self.user_pk}"
+
         # Join user group
         await self.channel_layer.group_add(
             self.group_name,
@@ -140,8 +178,13 @@ class TaskProgressConsumer(AsyncWebsocketConsumer):
         # Send connection confirmation
         await self.send(text_data=json.dumps({
             'type': 'connection_established',
-            'message': 'Connected to task progress updates',
-            'user_id': self.user_id
+            'channel': 'connection_status',
+            'data': {
+                'message': 'Connected to task progress updates',
+                'userId': getattr(user, 'user_id', None) or str(self.user_pk),
+                'timestamp': timezone.now().isoformat(),
+            },
+            'timestamp': timezone.now().isoformat()
         }))
     
     async def disconnect(self, close_code):
@@ -164,7 +207,7 @@ class TaskProgressConsumer(AsyncWebsocketConsumer):
                 }))
             elif message_type == 'get_active_tasks':
                 # Send list of active tasks for this user
-                active_tasks = await self.get_active_tasks(self.user_id)
+                active_tasks = await self.get_active_tasks(self.user_identifier)
                 await self.send(text_data=json.dumps({
                     'type': 'active_tasks',
                     'tasks': active_tasks
@@ -178,19 +221,19 @@ class TaskProgressConsumer(AsyncWebsocketConsumer):
     # Generic handlers for all task types
     async def task_progress(self, event):
         """Send task progress update"""
-        await self.send(text_data=json.dumps(event))
-    
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_progress')))
+
     async def task_completed(self, event):
         """Send task completion notification"""
-        await self.send(text_data=json.dumps(event))
-    
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_complete')))
+
     async def task_started(self, event):
         """Send task started notification"""
-        await self.send(text_data=json.dumps(event))
-    
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_progress')))
+
     async def task_failed(self, event):
         """Send task failure notification"""
-        await self.send(text_data=json.dumps(event))
+        await self.send(text_data=json.dumps(self._normalize_event(event, 'task_error')))
     
     @database_sync_to_async
     def get_user(self, user_id):
@@ -207,12 +250,55 @@ class TaskProgressConsumer(AsyncWebsocketConsumer):
         
         try:
             active_tasks = TaskProgress.objects.filter(
-                user_id=user_id,
+                user__user_id=user_id,
                 status__in=[TaskStatus.PENDING, TaskStatus.STARTED, TaskStatus.PROGRESS]
             ).values(
-                'task_id', 'task_name', 'status', 'progress', 
+                'task_id', 'task_name', 'status', 'progress',
                 'current_step', 'processed_items', 'total_items'
             )
             return list(active_tasks)
         except Exception:
             return []
+
+    def _normalize_event(self, event, default_channel):
+        channel = event.get('channel') or default_channel
+        timestamp = event.get('timestamp') or timezone.now().isoformat()
+        data = event.get('data', {}).copy()
+
+        if not data:
+            data = {
+                'taskId': event.get('task_id'),
+                'task_id': event.get('task_id'),
+                'type': event.get('task_type') or event.get('type'),
+                'status': event.get('status'),
+                'progress': event.get('progress'),
+                'currentStep': event.get('current_step'),
+                'progressMessage': event.get('current_step'),
+                'processedItems': event.get('processed_items'),
+                'totalItems': event.get('total_items'),
+                'result': event.get('result_data'),
+                'error': event.get('error_message'),
+            }
+
+        data.setdefault('taskId', data.get('task_id') or event.get('task_id'))
+        data.setdefault('task_id', data.get('taskId'))
+        data.setdefault('type', data.get('type') or event.get('task_type') or event.get('type'))
+        data.setdefault('status', event.get('status'))
+        data.setdefault('progress', event.get('progress'))
+        data.setdefault('currentStep', event.get('current_step'))
+        data.setdefault('progressMessage', data.get('currentStep'))
+        data.setdefault('processedItems', event.get('processed_items'))
+        data.setdefault('totalItems', event.get('total_items'))
+        data.setdefault('result', event.get('result_data'))
+        data.setdefault('error', event.get('error_message'))
+        data.setdefault('timestamp', timestamp)
+        data.setdefault('userId', getattr(self, 'user_identifier', None))
+
+        return {
+            'type': event.get('type'),
+            'channel': channel,
+            'data': data,
+            'task_id': data.get('task_id'),
+            'status': data.get('status'),
+            'timestamp': timestamp,
+        }

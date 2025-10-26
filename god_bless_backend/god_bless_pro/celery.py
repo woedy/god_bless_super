@@ -3,6 +3,7 @@ import os
 from celery import Celery
 from celery.signals import task_prerun, task_postrun, task_failure, task_success
 from celery.utils.log import get_task_logger
+from django.utils import timezone
 
 logger = get_task_logger(__name__)
 
@@ -81,14 +82,38 @@ def _send_task_completion_notification(task_progress, status, error_message=None
         
         channel_layer = get_channel_layer()
         if channel_layer:
+            channel_name = 'task_complete' if status == 'SUCCESS' else 'task_error'
+            event_type = 'task_completed' if status == 'SUCCESS' else 'task_failed'
+            frontend_status = 'completed' if status == 'SUCCESS' else 'failed'
+            user_identifier = getattr(task_progress.user, 'user_id', None) or str(task_progress.user_id)
+            timestamp = timezone.now().isoformat()
+            payload = {
+                "taskId": task_progress.task_id,
+                "task_id": task_progress.task_id,
+                "type": task_progress.category,
+                "status": frontend_status,
+                "progress": task_progress.progress,
+                "currentStep": task_progress.current_step,
+                "progressMessage": task_progress.current_step,
+                "processedItems": task_progress.processed_items,
+                "totalItems": task_progress.total_items,
+                "result": task_progress.result_data,
+                "error": error_message or task_progress.error_message,
+                "userId": user_identifier,
+                "timestamp": timestamp,
+            }
+
             async_to_sync(channel_layer.group_send)(
                 f"user_{task_progress.user_id}",
                 {
-                    "type": "task_completed",
+                    "type": event_type,
+                    "channel": channel_name,
+                    "data": payload,
                     "task_id": task_progress.task_id,
-                    "status": status,
+                    "status": frontend_status,
                     "result_data": task_progress.result_data,
                     "error_message": error_message or task_progress.error_message,
+                    "timestamp": timestamp,
                 }
             )
     except Exception as e:

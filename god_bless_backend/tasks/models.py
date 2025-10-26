@@ -144,33 +144,65 @@ class TaskProgress(models.Model):
         if not self.notification_sent:
             from channels.layers import get_channel_layer
             from asgiref.sync import async_to_sync
-            
+
             # Create persistent notification
             notification_type = 'success' if self.status == TaskStatus.SUCCESS else 'failure' if self.status == TaskStatus.FAILURE else 'cancelled'
             message = self.result_data.get('message', '') if self.status == TaskStatus.SUCCESS else self.error_message
-            
+
             TaskNotification.objects.create(
                 user=self.user,
                 task=self,
                 notification_type=notification_type,
                 message=message or f"Task {self.task_name} {notification_type}"
             )
-            
+
             # Send WebSocket notification
             channel_layer = get_channel_layer()
             if channel_layer:
                 try:
+                    channel_name, event_type, status = self._get_completion_event()
+                    user_identifier = getattr(self.user, 'user_id', None) or str(self.user_id)
+                    timestamp = timezone.now().isoformat()
+                    payload = {
+                        "taskId": self.task_id,
+                        "task_id": self.task_id,
+                        "type": self.category,
+                        "status": status,
+                        "progress": self.progress,
+                        "currentStep": self.current_step,
+                        "progressMessage": self.current_step,
+                        "processedItems": self.processed_items,
+                        "totalItems": self.total_items,
+                        "result": self.result_data,
+                        "error": self.error_message,
+                        "userId": user_identifier,
+                        "timestamp": timestamp,
+                    }
+
                     async_to_sync(channel_layer.group_send)(
                         f"user_{self.user_id}",
                         {
-                            "type": "task_completed",
+                            "type": event_type,
+                            "channel": channel_name,
+                            "data": payload,
                             "task_id": self.task_id,
-                            "status": self.status,
+                            "status": status,
                             "result_data": self.result_data,
                             "error_message": self.error_message,
+                            "timestamp": timestamp,
                         }
                     )
                     self.notification_sent = True
                     self.save(update_fields=['notification_sent'])
                 except Exception as e:
                     print(f"Failed to send completion notification: {e}")
+
+    def _get_completion_event(self):
+        """Return channel, event type and frontend status for completion"""
+        if self.status == TaskStatus.SUCCESS:
+            return 'task_complete', 'task_completed', 'completed'
+        if self.status == TaskStatus.FAILURE:
+            return 'task_error', 'task_failed', 'failed'
+        if self.status == TaskStatus.REVOKED:
+            return 'task_cancelled', 'task_cancelled', 'cancelled'
+        return 'task_complete', 'task_completed', str(self.status).lower()

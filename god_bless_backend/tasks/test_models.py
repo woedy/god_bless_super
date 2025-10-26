@@ -4,15 +4,32 @@ Tests Requirements: 6.1, 6.2, 6.3
 """
 import pytest
 from django.contrib.auth import get_user_model
-from tasks.models import TaskProgress, TaskNotification, TaskStatus, TaskCategory
 from django.utils import timezone
+from tasks.base import ProgressTrackingTask
+from tasks.models import TaskProgress, TaskNotification, TaskStatus, TaskCategory
 
 User = get_user_model()
+
+
+@pytest.fixture
+def user(db):
+    return User.objects.create_user(
+        username='test-user',
+        email='test@example.com',
+        password='password123'
+    )
 
 
 @pytest.mark.unit
 class TestTaskProgressModel:
     """Test TaskProgress model functionality"""
+
+    class DummyLayer:
+        def __init__(self):
+            self.calls = []
+
+        async def group_send(self, group, message):
+            self.calls.append((group, message))
     
     def test_create_task_progress(self, user):
         """Test creating a task progress record"""
@@ -108,7 +125,7 @@ class TestTaskProgressModel:
             started_at=timezone.now(),
             completed_at=timezone.now() + timezone.timedelta(seconds=120)
         )
-        assert task.duration == 120.0
+        assert task.duration == pytest.approx(120.0, abs=0.01)
     
     def test_duration_in_progress(self, user):
         """Test duration for in-progress task"""
@@ -120,6 +137,71 @@ class TestTaskProgressModel:
         )
         # Duration should be approximately 30 seconds
         assert task.duration >= 29 and task.duration <= 31
+
+    def test_progress_notification_structure(self, user, monkeypatch):
+        task_progress = TaskProgress.objects.create(
+            task_id='progress-task',
+            user=user,
+            task_name='Progress Task',
+            category=TaskCategory.PHONE_GENERATION,
+            status=TaskStatus.PENDING
+        )
+
+        dummy_task = ProgressTrackingTask()
+        dummy_task.task_progress = task_progress
+        dummy_task._user_identifier = user.user_id or str(user.pk)
+
+        dummy_layer = self.DummyLayer()
+        monkeypatch.setattr('channels.layers.get_channel_layer', lambda: dummy_layer)
+
+        dummy_task.update_progress(50, current_step='Processing batch 1', processed_items=50, total_items=100)
+
+        task_progress.refresh_from_db()
+        assert task_progress.status == TaskStatus.PROGRESS
+        assert dummy_layer.calls
+
+        group, message = dummy_layer.calls[0]
+        assert group == f"user_{user.pk}"
+        assert message['channel'] == 'task_progress'
+        assert message['data']['status'] == 'running'
+        assert message['data']['progress'] == 50
+        assert message['data']['userId'] == (user.user_id or str(user.pk))
+
+    def test_completion_notification_channels(self, user, monkeypatch):
+        success_task = TaskProgress.objects.create(
+            task_id='complete-task',
+            user=user,
+            task_name='Complete Task',
+            status=TaskStatus.STARTED,
+            category=TaskCategory.PHONE_GENERATION
+        )
+
+        failure_task = TaskProgress.objects.create(
+            task_id='failed-task',
+            user=user,
+            task_name='Failed Task',
+            status=TaskStatus.STARTED,
+            category=TaskCategory.PHONE_GENERATION
+        )
+
+        dummy_layer = self.DummyLayer()
+        monkeypatch.setattr('channels.layers.get_channel_layer', lambda: dummy_layer)
+
+        success_task.mark_success({'message': 'done'})
+        failure_task.mark_failure('boom')
+
+        assert len(dummy_layer.calls) >= 2
+        success_group, success_message = dummy_layer.calls[0]
+        failure_group, failure_message = dummy_layer.calls[1]
+
+        assert success_group == f"user_{user.pk}"
+        assert success_message['channel'] == 'task_complete'
+        assert success_message['data']['status'] == 'completed'
+
+        assert failure_group == f"user_{user.pk}"
+        assert failure_message['channel'] == 'task_error'
+        assert failure_message['data']['status'] == 'failed'
+        assert failure_message['data']['error'] == 'boom'
     
     def test_is_complete_property(self, user):
         """Test is_complete property"""
