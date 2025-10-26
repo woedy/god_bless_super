@@ -165,6 +165,11 @@ def generate_numbers_enhanced_view(request):
         carrier_filter = request.data.get('carrier_filter', None)
         type_filter = request.data.get('type_filter', None)
         batch_size = request.data.get('batch_size', 1000)
+        auto_validate_raw = request.data.get('auto_validate', False)
+        if isinstance(auto_validate_raw, str):
+            auto_validate = auto_validate_raw.lower() in ['true', '1', 'yes', 'on']
+        else:
+            auto_validate = bool(auto_validate_raw)
 
         # Validate input
         if not user_id:
@@ -204,14 +209,15 @@ def generate_numbers_enhanced_view(request):
             carrier_filter=carrier_filter,
             type_filter=type_filter,
             batch_size=batch_size,
-            auto_validate=False  # Default to False for legacy calls
+            auto_validate=auto_validate
         )
 
         data['task_id'] = task.id
         data['area_code'] = area_code
         data['quantity'] = quantity
+        data['auto_validate'] = auto_validate
         data['estimated_time'] = f"{quantity // 1000} minutes"  # Rough estimate
-        
+
         payload['message'] = "Phone number generation started"
         payload['data'] = data
 
