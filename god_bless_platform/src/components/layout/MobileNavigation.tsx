@@ -278,15 +278,15 @@ export function MobileNavigation({ isOpen, onClose, className = '' }: MobileNavi
       />
 
       {/* Navigation Drawer */}
-      <div 
+      <div
         className={`
-          fixed left-0 top-0 h-full w-80 bg-white dark:bg-gray-800 shadow-xl z-50 transform transition-transform duration-300 ease-out lg:hidden
+          fixed left-0 top-0 h-full w-80 theme-surface shadow-xl z-50 transform transition-transform duration-300 ease-out lg:hidden
           ${isOpen ? 'translate-x-0' : '-translate-x-full'}
           ${className}
         `}
       >
         {/* Header */}
-        <div className="flex items-center justify-between h-16 px-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between h-16 px-4 border-b theme-border">
           <div className="flex items-center">
             <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">GB</span>
@@ -317,7 +317,7 @@ export function MobileNavigation({ isOpen, onClose, className = '' }: MobileNavi
 
         {/* User Info */}
         {user && (
-          <div className="border-t border-gray-200 dark:border-gray-700 p-4">
+          <div className="border-t theme-border p-4">
             <div className="flex items-center">
               <div className="w-10 h-10 bg-gray-300 dark:bg-gray-600 rounded-full flex items-center justify-center">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">

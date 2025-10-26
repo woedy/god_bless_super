@@ -39,7 +39,7 @@ export function AppLayout({ children, breadcrumbs, className = '' }: AppLayoutPr
   }
 
   return (
-    <div className={`min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-200 ${className}`}>
+    <div className={`min-h-screen theme-bg-base transition-colors duration-200 ${className}`}>
       {/* Desktop Sidebar */}
       <div className="hidden lg:block">
         <Sidebar 
@@ -73,7 +73,7 @@ export function AppLayout({ children, breadcrumbs, className = '' }: AppLayoutPr
 
         {/* Breadcrumb Navigation */}
         {breadcrumbs && breadcrumbs.length > 0 && (
-          <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 sm:px-6 py-3 transition-colors duration-200">
+          <div className="theme-surface border-b theme-border px-4 sm:px-6 py-3 transition-colors duration-200">
             <Breadcrumb items={breadcrumbs} />
           </div>
         )}

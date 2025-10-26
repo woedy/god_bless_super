@@ -5,6 +5,67 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>god_bless_platform</title>
+    <script>
+      (function () {
+        var storageKey = 'god-bless-theme'
+        var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+
+        function resolveTheme(candidate) {
+          if (candidate === 'dark' || candidate === 'light') {
+            return candidate
+          }
+          if (candidate === 'system') {
+            return prefersDark ? 'dark' : 'light'
+          }
+          return prefersDark ? 'dark' : 'light'
+        }
+
+        function loadStoredTheme() {
+          try {
+            return localStorage.getItem(storageKey)
+          } catch (error) {
+            console.warn('Unable to read stored theme preference', error)
+            return null
+          }
+        }
+
+        function applyTheme(theme) {
+          var root = document.documentElement
+          var resolved = resolveTheme(theme)
+          var colorScheme = resolved === 'dark' ? 'dark' : 'light'
+
+          root.dataset.theme = resolved
+          root.style.colorScheme = colorScheme
+
+          if (resolved === 'dark') {
+            root.classList.add('dark')
+          } else {
+            root.classList.remove('dark')
+          }
+
+          var applyToBody = function () {
+            var body = document.body
+            if (!body) return
+            body.dataset.theme = resolved
+            body.style.colorScheme = colorScheme
+            if (resolved === 'dark') {
+              body.classList.add('dark')
+            } else {
+              body.classList.remove('dark')
+            }
+          }
+
+          if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', applyToBody)
+          } else {
+            applyToBody()
+          }
+        }
+
+        var storedTheme = resolveTheme(loadStoredTheme())
+        applyTheme(storedTheme)
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

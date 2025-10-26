@@ -51,13 +51,17 @@ export function ThemeProvider({
   // Apply theme to document
   const applyTheme = (resolvedTheme: ResolvedTheme) => {
     const root = document.documentElement
-    
-    if (resolvedTheme === 'dark') {
-      root.classList.add('dark')
-      root.style.colorScheme = 'dark'
-    } else {
-      root.classList.remove('dark')
-      root.style.colorScheme = 'light'
+    const body = document.body
+    const colorScheme = resolvedTheme === 'dark' ? 'dark' : 'light'
+
+    root.dataset.theme = resolvedTheme
+    root.style.colorScheme = colorScheme
+    root.classList.toggle('dark', resolvedTheme === 'dark')
+
+    if (body) {
+      body.dataset.theme = resolvedTheme
+      body.style.colorScheme = colorScheme
+      body.classList.toggle('dark', resolvedTheme === 'dark')
     }
   }
 

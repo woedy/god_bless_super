@@ -166,9 +166,9 @@ export function Header({ onSidebarToggle, sidebarCollapsed, isMobile = false, cl
   const hasActiveProject = Boolean(currentProjectId)
 
   return (
-    <header 
+    <header
       className={`
-        bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 shadow-sm h-16 flex items-center justify-between px-4 sm:px-6 transition-colors duration-200
+        theme-surface border-b theme-border shadow-sm h-16 flex items-center justify-between px-4 sm:px-6 transition-colors duration-200
         ${className}
       `}
     >

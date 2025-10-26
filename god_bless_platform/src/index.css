@@ -6,6 +6,81 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  color-scheme: light;
+  --theme-bg-base: #f8fafc;
+  --theme-bg-surface: #ffffff;
+  --theme-bg-muted: #f1f5f9;
+  --theme-border: #d7dce4;
+  --theme-text-primary: #0f172a;
+  --theme-text-secondary: #475569;
+  --theme-text-muted: #64748b;
+  --theme-shadow: 0 10px 30px -12px rgba(15, 23, 42, 0.35);
+}
+
+html[data-theme='dark'],
+body[data-theme='dark'] {
+  color-scheme: dark;
+  --theme-bg-base: #0f172a;
+  --theme-bg-surface: #111827;
+  --theme-bg-muted: #1f2937;
+  --theme-border: #1f2937;
+  --theme-text-primary: #f8fafc;
+  --theme-text-secondary: #cbd5f5;
+  --theme-text-muted: #9ca3af;
+  --theme-shadow: 0 12px 32px -14px rgba(15, 23, 42, 0.65);
+}
+
+body {
+  background-color: var(--theme-bg-base);
+  color: var(--theme-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+#root {
+  min-height: 100vh;
+  background-color: var(--theme-bg-base);
+  color: var(--theme-text-primary);
+}
+
+.theme-bg-base {
+  background-color: var(--theme-bg-base);
+  color: var(--theme-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.theme-surface {
+  background-color: var(--theme-bg-surface);
+  color: var(--theme-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.theme-surface-muted {
+  background-color: var(--theme-bg-muted);
+  color: var(--theme-text-primary);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.theme-border {
+  border-color: var(--theme-border);
+}
+
+.theme-text-primary {
+  color: var(--theme-text-primary);
+}
+
+.theme-text-secondary {
+  color: var(--theme-text-secondary);
+}
+
+.theme-text-muted {
+  color: var(--theme-text-muted);
+}
+
+.theme-shadow {
+  box-shadow: var(--theme-shadow);
+}
+
 body {
   font-family: 'Inter', system-ui, sans-serif;
   font-feature-settings: "rlig" 1, "calt" 1;
