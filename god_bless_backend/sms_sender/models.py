@@ -166,11 +166,31 @@ class CampaignDeliverySettings(models.Model):
     custom_delay_min = models.IntegerField(default=1, help_text="Minimum delay in seconds")
     custom_delay_max = models.IntegerField(default=5, help_text="Maximum delay in seconds")
     custom_random_seed = models.IntegerField(null=True, blank=True, help_text="Random seed for reproducible delays")
-    
+
+    # Manual server selections
+    selected_smtp_account_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Explicit SMTP account IDs to prioritise during delivery"
+    )
+    selected_proxy_ids = models.JSONField(
+        default=list,
+        blank=True,
+        help_text="Explicit proxy server IDs to prioritise during delivery"
+    )
+
     # Smart delivery features
     adaptive_optimization_enabled = models.BooleanField(default=False)
     carrier_optimization_enabled = models.BooleanField(default=False)
     timezone_optimization_enabled = models.BooleanField(default=False)
+
+    # Template alignment
+    applied_template_id = models.CharField(
+        max_length=64,
+        null=True,
+        blank=True,
+        help_text="Identifier of the optimisation template applied to this campaign"
+    )
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

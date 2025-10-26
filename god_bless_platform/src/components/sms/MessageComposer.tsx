@@ -13,6 +13,7 @@ interface MessageComposerProps {
   templates?: any[]
   onMessageChange: (message: string) => void
   onMacrosChange: (macros: Record<string, any>) => void
+  onTemplateSelect?: (template: any) => void
 }
 
 export const MessageComposer: React.FC<MessageComposerProps> = ({
@@ -21,7 +22,8 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
   availableMacros,
   templates = [],
   onMessageChange,
-  onMacrosChange
+  onMacrosChange,
+  onTemplateSelect
 }) => {
   const [showTemplates, setShowTemplates] = useState(false)
   const [showMacros, setShowMacros] = useState(false)
@@ -93,6 +95,7 @@ export const MessageComposer: React.FC<MessageComposerProps> = ({
     if (template.suggested_macros) {
       onMacrosChange({ ...customMacros, ...template.suggested_macros })
     }
+    onTemplateSelect?.(template)
     setShowTemplates(false)
   }
 
