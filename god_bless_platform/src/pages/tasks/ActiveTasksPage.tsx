@@ -282,56 +282,56 @@ export function ActiveTasksPage() {
 
         {/* Pending Tasks */}
         {pendingTasks.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-lg font-semibold text-gray-900">Pending Tasks</h2>
-              <p className="text-sm text-gray-600 mt-1">
+          <div className="theme-card rounded-2xl">
+            <div className="p-6 theme-card-header">
+              <h2 className="text-lg font-semibold theme-text-primary">Pending Tasks</h2>
+              <p className="text-sm theme-text-muted mt-1">
                 Tasks waiting to be processed
               </p>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50">
+              <table className="theme-table">
+                <thead>
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Task
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Type
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Created
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                       Actions
                     </th>
                   </tr>
                 </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
+                <tbody>
                   {pendingTasks.map((task) => (
-                    <tr key={task.id}>
+                    <tr key={task.id} className="theme-table-row">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div>
-                          <div className="text-sm font-medium text-gray-900">
-                            {task.type.split('_').map(word => 
+                          <div className="text-sm font-medium theme-text-primary">
+                            {task.type.split('_').map(word =>
                               word.charAt(0).toUpperCase() + word.slice(1)
                             ).join(' ')}
                           </div>
-                          <div className="text-sm text-gray-500">
+                          <div className="text-sm theme-text-muted">
                             ID: {task.id.substring(0, 8)}...
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                         {task.type}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <TaskStatusIndicator status={task.status} />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                         {new Date(task.createdAt).toLocaleString()}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-2">

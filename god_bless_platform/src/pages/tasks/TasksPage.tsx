@@ -160,10 +160,10 @@ export function TasksPage() {
                   Running
                 </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="w-full theme-progress-track rounded-full h-2">
                 <div className="bg-blue-600 h-2 rounded-full" style={{ width: '23%' }}></div>
               </div>
-              <div className="flex justify-between text-xs text-gray-500 mt-1">
+              <div className="flex justify-between text-xs theme-text-muted mt-1">
                 <span>23% complete</span>
                 <span>Started 5 minutes ago</span>
               </div>
@@ -172,110 +172,108 @@ export function TasksPage() {
         </div>
 
         {/* Recent Tasks */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold text-gray-900">Recent Tasks</h2>
-              <Button variant="ghost" size="sm">View All</Button>
-            </div>
+        <div className="theme-card rounded-2xl">
+          <div className="p-6 theme-card-header flex items-center justify-between">
+            <h2 className="text-lg font-semibold theme-text-primary">Recent Tasks</h2>
+            <Button variant="ghost" size="sm">View All</Button>
           </div>
           <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead className="bg-gray-50">
+            <table className="theme-table">
+              <thead>
                 <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                     Task
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                     Type
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                     Status
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                     Progress
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                     Duration
                   </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                     Completed
                   </th>
                 </tr>
               </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                <tr>
+              <tbody>
+                <tr className="theme-table-row">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">Export Phone Numbers</div>
-                      <div className="text-sm text-gray-500">Project Alpha - CSV export</div>
+                      <div className="text-sm font-medium theme-text-primary">Export Phone Numbers</div>
+                      <div className="text-sm theme-text-muted">Project Alpha - CSV export</div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     Export
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                    <span className="px-2 py-1 text-xs bg-emerald-500/10 text-emerald-500 rounded-full">
                       Completed
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-primary">
                     100%
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     2m 34s
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     1 hour ago
                   </td>
                 </tr>
-                <tr>
+                <tr className="theme-table-row">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">Bulk Validation</div>
-                      <div className="text-sm text-gray-500">Project Gamma - 50,000 numbers</div>
+                      <div className="text-sm font-medium theme-text-primary">Bulk Validation</div>
+                      <div className="text-sm theme-text-muted">Project Gamma - 50,000 numbers</div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     Validation
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                    <span className="px-2 py-1 text-xs bg-emerald-500/10 text-emerald-500 rounded-full">
                       Completed
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-primary">
                     100%
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     15m 22s
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     3 hours ago
                   </td>
                 </tr>
-                <tr>
+                <tr className="theme-table-row">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div>
-                      <div className="text-sm font-medium text-gray-900">SMS Campaign</div>
-                      <div className="text-sm text-gray-500">Product Launch - 12,500 recipients</div>
+                      <div className="text-sm font-medium theme-text-primary">SMS Campaign</div>
+                      <div className="text-sm theme-text-muted">Product Launch - 12,500 recipients</div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     SMS Campaign
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className="px-2 py-1 text-xs bg-red-100 text-red-800 rounded-full">
+                    <span className="px-2 py-1 text-xs bg-rose-500/10 text-rose-500 rounded-full">
                       Failed
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-primary">
                     45%
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     8m 15s
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     6 hours ago
                   </td>
                 </tr>

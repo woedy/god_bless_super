@@ -67,45 +67,42 @@ export const Table = <T extends Record<string, any>>({
 
   if (loading) {
     return (
-      <div className={`overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg ${className}`}>
-        <div className="min-w-full divide-y divide-gray-300">
-          <div className="bg-gray-50 px-6 py-3">
-            <div className="animate-pulse flex space-x-4">
-              <div className="flex-1 space-y-2 py-1">
-                <div className="h-4 bg-gray-300 rounded w-3/4"></div>
+      <div className={`theme-table-container ${className}`}>
+        <div className="border-b theme-border px-6 py-4">
+          <div className="flex items-center space-x-3 text-sm theme-text-muted">
+            <span className="inline-flex h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"></span>
+            <span>Loading...</span>
+          </div>
+        </div>
+        <div>
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className={`px-6 py-4 ${i < 4 ? 'border-b theme-border' : ''}`}
+            >
+              <div className="space-y-2">
+                <div className="h-4 w-3/4 rounded theme-loading-bar animate-pulse"></div>
+                <div className="h-4 w-1/2 rounded theme-loading-bar animate-pulse"></div>
               </div>
             </div>
-          </div>
-          <div className="bg-white divide-y divide-gray-200">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="px-6 py-4">
-                <div className="animate-pulse flex space-x-4">
-                  <div className="flex-1 space-y-2 py-1">
-                    <div className="h-4 bg-gray-300 rounded"></div>
-                    <div className="h-4 bg-gray-300 rounded w-5/6"></div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+          ))}
         </div>
       </div>
     )
   }
 
   return (
-    <div className={`overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg ${className}`}>
-      <table className="min-w-full divide-y divide-gray-300">
-        <thead className="bg-gray-50">
+    <div className={`theme-table-container ${className}`}>
+      <div className="overflow-x-auto">
+        <table className="theme-table">
+          <thead>
           <tr>
             {columns.map((column) => (
               <th
                 key={column.key}
-                className={`
-                  px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider
-                  ${column.sortable ? 'cursor-pointer hover:bg-gray-100' : ''}
-                  ${column.headerClassName || ''}
-                `}
+                className={`px-6 py-3 text-left text-xs font-semibold tracking-wider theme-table-header-cell ${
+                  column.sortable ? 'theme-header-sortable hover:bg-gray-100 focus-visible:bg-gray-100' : ''
+                } ${column.headerClassName || ''}`}
                 onClick={() => handleSort(column)}
               >
                 <div className="flex items-center">
@@ -116,24 +113,24 @@ export const Table = <T extends Record<string, any>>({
             ))}
           </tr>
         </thead>
-        
-        <tbody className="bg-white divide-y divide-gray-200">
+
+        <tbody>
           {data.length === 0 ? (
             <tr>
               <td
                 colSpan={columns.length}
-                className="px-6 py-12 text-center text-sm text-gray-500"
+                className="theme-table-empty"
               >
                 {emptyMessage}
               </td>
             </tr>
           ) : (
             data.map((row, index) => (
-              <tr key={row.id || index} className="hover:bg-gray-50">
+              <tr key={row.id || index} className="theme-table-row">
                 {columns.map((column) => (
                   <td
                     key={column.key}
-                    className={`px-6 py-4 whitespace-nowrap text-sm text-gray-900 ${column.className || ''}`}
+                    className={`px-6 py-4 whitespace-nowrap text-sm theme-table-cell ${column.className || ''}`}
                   >
                     {column.render
                       ? column.render(row[column.key], row, index)
@@ -146,6 +143,7 @@ export const Table = <T extends Record<string, any>>({
           )}
         </tbody>
       </table>
+    </div>
     </div>
   )
 }

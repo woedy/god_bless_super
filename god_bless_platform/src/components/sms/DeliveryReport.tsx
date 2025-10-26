@@ -108,17 +108,17 @@ export const DeliveryReport: React.FC<DeliveryReportProps> = ({
     switch (status) {
       case 'sent':
       case 'delivered':
-        return 'text-green-600 bg-green-100'
+        return 'text-emerald-500 bg-emerald-500/10'
       case 'failed':
       case 'bounced':
-        return 'text-red-600 bg-red-100'
+        return 'text-rose-500 bg-rose-500/10'
       case 'pending':
       case 'queued':
-        return 'text-yellow-600 bg-yellow-100'
+        return 'text-amber-500 bg-amber-500/10'
       case 'sending':
-        return 'text-blue-600 bg-blue-100'
+        return 'text-blue-500 bg-blue-500/10'
       default:
-        return 'text-gray-600 bg-gray-100'
+        return 'text-slate-500 bg-slate-500/10'
     }
   }
 
@@ -306,13 +306,13 @@ export const DeliveryReport: React.FC<DeliveryReportProps> = ({
       <div className="bg-white p-4 rounded-lg border border-gray-200">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium theme-text-secondary mb-1">
               Status
             </label>
             <select
               value={messageFilters.status}
               onChange={(e) => setMessageFilters(prev => ({ ...prev, status: e.target.value, page: 1 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border theme-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">All Statuses</option>
               <option value="pending">Pending</option>
@@ -326,14 +326,14 @@ export const DeliveryReport: React.FC<DeliveryReportProps> = ({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium theme-text-secondary mb-1">
               Carrier
             </label>
             <input
               type="text"
               value={messageFilters.carrier}
               onChange={(e) => setMessageFilters(prev => ({ ...prev, carrier: e.target.value, page: 1 }))}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border theme-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Filter by carrier"
             />
           </div>
@@ -341,7 +341,7 @@ export const DeliveryReport: React.FC<DeliveryReportProps> = ({
           <div className="flex items-end">
             <button
               onClick={() => setMessageFilters({ status: '', carrier: '', page: 1, page_size: 50 })}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+              className="px-4 py-2 text-sm font-medium theme-text-secondary theme-surface border theme-border rounded-md hover:bg-gray-50"
             >
               Clear Filters
             </button>
@@ -350,35 +350,35 @@ export const DeliveryReport: React.FC<DeliveryReportProps> = ({
       </div>
 
       {/* Messages Table */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+      <div className="theme-card rounded-2xl overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
+          <table className="theme-table">
+            <thead>
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                   Phone Number
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                   Status
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                   Carrier
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                   Attempts
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                   Sent At
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-3 text-left text-xs font-semibold theme-table-header-cell tracking-wider">
                   Error
                 </th>
               </tr>
             </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
+            <tbody>
               {messages.map((message) => (
-                <tr key={message.id} className="hover:bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                <tr key={message.id} className="theme-table-row">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium theme-text-primary">
                     {message.phone_number}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
@@ -386,16 +386,16 @@ export const DeliveryReport: React.FC<DeliveryReportProps> = ({
                       {message.delivery_status.replace('_', ' ').toUpperCase()}
                     </span>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     {message.carrier || 'Unknown'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     {message.send_attempts}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm theme-text-muted">
                     {message.sent_at ? formatDate(message.sent_at) : 'Not sent'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-red-600 max-w-xs truncate">
+                  <td className="px-6 py-4 text-sm text-rose-500 max-w-xs truncate">
                     {message.error_message || '-'}
                   </td>
                 </tr>
@@ -405,26 +405,26 @@ export const DeliveryReport: React.FC<DeliveryReportProps> = ({
         </div>
 
         {/* Pagination */}
-        <div className="bg-white px-4 py-3 flex items-center justify-between border-t border-gray-200">
+        <div className="theme-surface px-4 py-3 flex items-center justify-between border-t theme-border">
           <div className="flex-1 flex justify-between sm:hidden">
             <button
               onClick={() => setMessageFilters(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
               disabled={messageFilters.page === 1}
-              className="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="relative inline-flex items-center px-4 py-2 border theme-border text-sm font-medium rounded-md theme-text-secondary theme-surface hover:bg-gray-50 disabled:opacity-50"
             >
               Previous
             </button>
             <button
               onClick={() => setMessageFilters(prev => ({ ...prev, page: prev.page + 1 }))}
               disabled={messages.length < messageFilters.page_size}
-              className="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+              className="ml-3 relative inline-flex items-center px-4 py-2 border theme-border text-sm font-medium rounded-md theme-text-secondary theme-surface hover:bg-gray-50 disabled:opacity-50"
             >
               Next
             </button>
           </div>
-          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+          <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between theme-text-muted">
             <div>
-              <p className="text-sm text-gray-700">
+              <p className="text-sm">
                 Showing{' '}
                 <span className="font-medium">
                   {(messageFilters.page - 1) * messageFilters.page_size + 1}
@@ -442,14 +442,14 @@ export const DeliveryReport: React.FC<DeliveryReportProps> = ({
                 <button
                   onClick={() => setMessageFilters(prev => ({ ...prev, page: Math.max(1, prev.page - 1) }))}
                   disabled={messageFilters.page === 1}
-                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  className="relative inline-flex items-center px-2 py-2 rounded-l-md border theme-border theme-surface text-sm font-medium theme-text-muted hover:bg-gray-50 disabled:opacity-50"
                 >
                   Previous
                 </button>
                 <button
                   onClick={() => setMessageFilters(prev => ({ ...prev, page: prev.page + 1 }))}
                   disabled={messages.length < messageFilters.page_size}
-                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  className="relative inline-flex items-center px-2 py-2 rounded-r-md border theme-border theme-surface text-sm font-medium theme-text-muted hover:bg-gray-50 disabled:opacity-50"
                 >
                   Next
                 </button>
