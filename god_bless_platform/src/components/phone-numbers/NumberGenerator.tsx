@@ -3,7 +3,7 @@
  * Interface for generating phone numbers with various options
  */
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { Button, Input, Select, Card, Checkbox, ProgressBar } from '../common'
 import { phoneNumberService } from '../../services'
 import { useTaskProgress } from '../../hooks'
@@ -14,6 +14,8 @@ interface NumberGeneratorProps {
   onGenerationComplete?: (taskId: string) => void
   onError?: (error: string) => void
 }
+
+type GenerationStage = 'generation' | 'validation'
 
 interface CountryOption {
   code: string
@@ -47,6 +49,7 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
   const [progressMessage, setProgressMessage] = useState<string>('')
   const [currentTaskId, setCurrentTaskId] = useState<string | null>(null)
+  const [activeStage, setActiveStage] = useState<GenerationStage | null>(null)
 
   // Options state
   const [countries, setCountries] = useState<CountryOption[]>([])
@@ -124,6 +127,21 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
     error: taskError
   } = useTaskProgress(currentTaskId)
 
+  const rootTaskIdRef = useRef<string | null>(null)
+  const latestTaskIdRef = useRef<string | null>(null)
+
+  const resetTaskTracking = useCallback(() => {
+    setCurrentTaskId(null)
+    setActiveStage(null)
+    rootTaskIdRef.current = null
+    latestTaskIdRef.current = null
+  }, [])
+
+  const trackTaskId = useCallback((taskId: string | null) => {
+    setCurrentTaskId(taskId)
+    latestTaskIdRef.current = taskId
+  }, [])
+
   // Sync WebSocket progress message into local state for display
   useEffect(() => {
     if (taskProgressMessage) {
@@ -138,12 +156,63 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
     }
 
     if (isCompleted) {
+      const resultData = (task?.result?.data || {}) as Record<string, any>
+      const autoValidationTaskId =
+        resultData.auto_validation_task_id ||
+        resultData.autoValidationTaskId ||
+        resultData.validation_task_id ||
+        resultData.validationTaskId
+
+      if (activeStage !== 'validation' && autoValidationTaskId) {
+        const targetCount =
+          resultData.auto_validation_target_count ||
+          resultData.autoValidationTargetCount ||
+          resultData.validation_target_count ||
+          resultData.validationTargetCount
+
+        setProgressMessage(
+          targetCount
+            ? `Generation completed. Auto-validating ${targetCount} numbers...`
+            : 'Generation completed. Starting auto-validation...'
+        )
+        setActiveStage('validation')
+        trackTaskId(String(autoValidationTaskId))
+        return
+      }
+
+      const resultMessage =
+        typeof resultData.message === 'string'
+          ? resultData.message
+          : undefined
+
+      const completionMessage =
+        resultMessage ||
+        task?.result?.message ||
+        (activeStage === 'validation'
+          ? 'Auto-validation completed successfully!'
+          : 'Generation completed successfully!')
+
       setIsGenerating(false)
-      setProgressMessage(prev => prev || 'Generation completed successfully!')
-      onGenerationComplete?.(currentTaskId)
-      setCurrentTaskId(null)
+      setProgressMessage(prev => prev || completionMessage)
+
+      const completionId =
+        rootTaskIdRef.current || latestTaskIdRef.current || currentTaskId
+      if (completionId) {
+        onGenerationComplete?.(completionId)
+      }
+
+      resetTaskTracking()
     }
-  }, [isCompleted, currentTaskId, onGenerationComplete])
+  }, [
+    isCompleted,
+    currentTaskId,
+    activeStage,
+    task?.result?.data,
+    task?.result?.message,
+    onGenerationComplete,
+    trackTaskId,
+    resetTaskTracking
+  ])
 
   // Handle task failure or cancellation
   useEffect(() => {
@@ -153,15 +222,25 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
 
     if (isFailed || isCancelled) {
       setIsGenerating(false)
-      setCurrentTaskId(null)
+      const stageLabel = activeStage === 'validation' ? 'Auto-validation' : 'Generation'
       setProgressMessage('')
       const failureMessage =
         task?.error?.message ??
         taskError ??
-        (isCancelled ? 'Generation was cancelled' : 'Generation failed')
+        (isCancelled ? `${stageLabel} was cancelled` : `${stageLabel} failed`)
       onError?.(failureMessage)
+      resetTaskTracking()
     }
-  }, [isFailed, isCancelled, taskError, task?.error?.message, currentTaskId, onError])
+  }, [
+    isFailed,
+    isCancelled,
+    taskError,
+    task?.error?.message,
+    currentTaskId,
+    onError,
+    activeStage,
+    resetTaskTracking
+  ])
 
   const handleGenerate = async () => {
     if (!selectedCountry) {
@@ -177,6 +256,9 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
     try {
       setIsGenerating(true)
       setProgressMessage('Starting phone number generation...')
+      setActiveStage('generation')
+      rootTaskIdRef.current = null
+      latestTaskIdRef.current = null
 
       const params: GenerateNumbersParams = {
         projectId: project.id,
@@ -192,8 +274,10 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
       const response = await phoneNumberService.generateNumbers(params)
 
       if (response.success) {
-        setCurrentTaskId(response.data.id)
-        setProgressMessage('Generation task started...')
+        rootTaskIdRef.current = response.data.id
+        setActiveStage('generation')
+        trackTaskId(response.data.id)
+        setProgressMessage(response.data.progressMessage || 'Generation task started...')
       } else {
         throw new Error('Failed to start generation task')
       }
@@ -202,13 +286,14 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
       setIsGenerating(false)
       setProgressMessage('')
       onError?.(error instanceof Error ? error.message : 'Generation failed')
+      resetTaskTracking()
     }
   }
 
   const handleCancel = () => {
     setIsGenerating(false)
     setProgressMessage('')
-    setCurrentTaskId(null)
+    resetTaskTracking()
   }
 
   const countryOptions = countries.map(country => ({
@@ -241,7 +326,9 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
         <div className="mb-6 p-4 bg-blue-50 rounded-lg">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-blue-900">
-              Generating Numbers...
+              {activeStage === 'validation'
+                ? 'Auto-validating Numbers...'
+                : 'Generating Numbers...'}
             </span>
             <span className="text-sm text-blue-700">
               {Math.round(progress)}%
@@ -354,7 +441,11 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
           loading={isGenerating}
           className="min-w-32"
         >
-          {isGenerating ? 'Generating...' : 'Generate Numbers'}
+          {isGenerating
+            ? activeStage === 'validation'
+              ? 'Validating...'
+              : 'Generating...'
+            : 'Generate Numbers'}
         </Button>
       </div>
     </Card>

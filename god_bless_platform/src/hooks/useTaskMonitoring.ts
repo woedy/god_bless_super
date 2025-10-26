@@ -4,16 +4,338 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { apiClient } from "../services/api";
+import { apiClient, ApiClientError } from "../services/api";
 import { useWebSocketSubscription } from "./useWebSocket";
 import { WS_CHANNELS } from "../types/websocket";
 import { API_ENDPOINTS, config } from "../config";
-import type { Task, TaskStatus, TaskType, ID } from "../types/models";
+import { STORAGE_KEYS } from "../config/constants";
+import type {
+  Task,
+  TaskError,
+  TaskResult,
+  TaskStatus,
+  TaskType,
+  ID,
+} from "../types/models";
 import type {
   TaskProgressMessage,
   TaskCompleteMessage,
   WebSocketMessage,
 } from "../types/websocket";
+
+type RawTaskPayload = Partial<Task> & {
+  task_id?: ID;
+  taskId?: ID;
+  category?: TaskType;
+  status?: string;
+  current_step?: string;
+  currentStep?: string;
+  progressMessage?: string;
+  progress?: number | string;
+  result_data?: unknown;
+  error_message?: unknown;
+  created_at?: string;
+  started_at?: string;
+  completed_at?: string;
+  estimated_completion?: string;
+  duration?: number;
+  user_id?: ID;
+  project_id?: ID;
+  task_args?: Record<string, unknown>;
+  retry_count?: number;
+  max_retries?: number;
+  can_retry?: boolean;
+};
+
+const STATUS_MAP: Record<string, TaskStatus> = {
+  pending: "pending",
+  PENDING: "pending",
+  started: "running",
+  STARTED: "running",
+  progress: "running",
+  PROGRESS: "running",
+  running: "running",
+  RUNNING: "running",
+  success: "completed",
+  SUCCESS: "completed",
+  completed: "completed",
+  COMPLETED: "completed",
+  failure: "failed",
+  FAILURE: "failed",
+  failed: "failed",
+  FAILED: "failed",
+  revoked: "cancelled",
+  REVOKED: "cancelled",
+  cancelled: "cancelled",
+  CANCELLED: "cancelled",
+  retry: "retrying",
+  RETRY: "retrying",
+  retrying: "retrying",
+  RETRYING: "retrying",
+};
+
+function normalizeTaskStatus(status?: string | null): TaskStatus {
+  if (!status) {
+    return "pending";
+  }
+  return STATUS_MAP[status] || ((status.toLowerCase() as TaskStatus) ?? "pending");
+}
+
+function normalizeTimestamp(value?: string | null): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value || undefined;
+  }
+  return date.toISOString();
+}
+
+function getStoredUserId(): ID | undefined {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.USER_DATA);
+    if (!raw) {
+      return undefined;
+    }
+    const user = JSON.parse(raw);
+    return user?.user_id || user?.id || user?.userId || undefined;
+  } catch (error) {
+    console.warn("Failed to read stored user data for task monitoring", error);
+    return undefined;
+  }
+}
+
+function normalizeTaskResult(
+  raw: unknown,
+  status: TaskStatus,
+  previous?: TaskResult
+): TaskResult | undefined {
+  if (!raw) {
+    return previous;
+  }
+
+  if (typeof raw === "object" && raw !== null) {
+    const result = raw as Record<string, any>;
+    const success =
+      typeof result.success === "boolean"
+        ? result.success
+        : status === "completed";
+    const message =
+      typeof result.message === "string" && result.message.length > 0
+        ? result.message
+        : previous?.message || (status === "completed" ? "Task completed successfully" : "");
+
+    let statistics = result.statistics ?? previous?.statistics;
+    if (!statistics) {
+      const hasStatsFields =
+        [
+          "itemsTotal",
+          "itemsProcessed",
+          "successCount",
+          "errorCount",
+          "warningCount",
+          "duration",
+          "totalItems",
+          "processedItems",
+          "successfulItems",
+          "failedItems",
+        ].some((key) => key in result);
+
+      if (hasStatsFields) {
+        statistics = {
+          totalItems:
+            result.totalItems ??
+            result.itemsTotal ??
+            previous?.statistics?.totalItems ??
+            0,
+          processedItems:
+            result.processedItems ??
+            result.itemsProcessed ??
+            previous?.statistics?.processedItems ??
+            0,
+          successfulItems:
+            result.successfulItems ??
+            result.successCount ??
+            previous?.statistics?.successfulItems ??
+            0,
+          failedItems:
+            result.failedItems ??
+            result.errorCount ??
+            previous?.statistics?.failedItems ??
+            0,
+          skippedItems:
+            result.skippedItems ??
+            result.warningCount ??
+            previous?.statistics?.skippedItems ??
+            0,
+          duration:
+            result.duration ??
+            previous?.statistics?.duration ??
+            0,
+        };
+      }
+    }
+
+    return {
+      success,
+      message,
+      data: result.data ?? raw,
+      statistics,
+      downloadUrl: result.downloadUrl ?? previous?.downloadUrl,
+      warnings: result.warnings ?? previous?.warnings,
+    };
+  }
+
+  if (typeof raw === "string") {
+    return {
+      success: status === "completed",
+      message: raw,
+      data: previous?.data,
+      statistics: previous?.statistics,
+      warnings: previous?.warnings,
+      downloadUrl: previous?.downloadUrl,
+    };
+  }
+
+  return previous;
+}
+
+function normalizeTaskError(raw: unknown, previous?: TaskError): TaskError | undefined {
+  if (!raw) {
+    return previous;
+  }
+
+  if (typeof raw === "object" && raw !== null && "message" in (raw as any)) {
+    const errorObject = raw as Record<string, any>;
+    return {
+      code: String(errorObject.code || previous?.code || "TASK_ERROR"),
+      message: String(errorObject.message ?? previous?.message ?? ""),
+      details: errorObject.details ?? previous?.details,
+      stackTrace: errorObject.stackTrace ?? previous?.stackTrace,
+      retryable:
+        typeof errorObject.retryable === "boolean"
+          ? errorObject.retryable
+          : previous?.retryable ?? false,
+    };
+  }
+
+  if (typeof raw === "string") {
+    return {
+      code: previous?.code || "TASK_ERROR",
+      message: raw,
+      details: previous?.details,
+      stackTrace: previous?.stackTrace,
+      retryable: previous?.retryable ?? false,
+    };
+  }
+
+  return previous;
+}
+
+function normalizeTaskPayload(
+  payload: RawTaskPayload,
+  previous?: Task | null,
+  fallbackUserId?: ID
+): Task | null {
+  const resolvedId =
+    (payload.id as ID) || payload.taskId || payload.task_id || previous?.id;
+
+  if (!resolvedId) {
+    return previous ?? null;
+  }
+
+  const resolvedStatus = normalizeTaskStatus(payload.status ?? previous?.status);
+  const resolvedType =
+    (payload.type as TaskType) ||
+    (payload.category as TaskType) ||
+    previous?.type ||
+    "phone_generation";
+
+  const progressValue =
+    typeof payload.progress === "number"
+      ? payload.progress
+      : typeof payload.progress === "string"
+      ? Number.parseFloat(payload.progress)
+      : undefined;
+
+  const createdAt =
+    payload.createdAt || normalizeTimestamp(payload.created_at) || previous?.createdAt || new Date().toISOString();
+
+  const startedAt =
+    payload.startedAt || normalizeTimestamp(payload.started_at) || previous?.startedAt;
+
+  const completedAt =
+    payload.completedAt || normalizeTimestamp(payload.completed_at) || previous?.completedAt;
+
+  let estimatedDuration = payload.estimatedDuration ?? previous?.estimatedDuration;
+  if (estimatedDuration === undefined && payload.estimated_completion) {
+    const estimate = new Date(payload.estimated_completion).getTime();
+    const start = startedAt ? new Date(startedAt).getTime() : Date.now();
+    if (!Number.isNaN(estimate) && !Number.isNaN(start)) {
+      estimatedDuration = Math.max(0, Math.round((estimate - start) / 1000));
+    }
+  }
+
+  const actualDuration =
+    payload.actualDuration ?? payload.duration ?? previous?.actualDuration;
+
+  const result = normalizeTaskResult(
+    (payload.result as unknown) ?? payload.result_data,
+    resolvedStatus,
+    previous?.result
+  );
+
+  const error = normalizeTaskError(
+    payload.error ?? payload.error_message,
+    previous?.error
+  );
+
+  const parameters =
+    payload.parameters || payload.task_args || previous?.parameters || {};
+
+  const retryCount =
+    payload.retryCount ?? payload.retry_count ?? previous?.retryCount ?? 0;
+
+  const maxRetries =
+    payload.maxRetries ?? payload.max_retries ?? previous?.maxRetries ?? 3;
+
+  const canRetry =
+    payload.canRetry ??
+    payload.can_retry ??
+    previous?.canRetry ??
+    resolvedStatus === "failed";
+
+  return {
+    id: resolvedId,
+    type: resolvedType,
+    status: resolvedStatus,
+    progress: progressValue ?? previous?.progress ?? (resolvedStatus === "completed" ? 100 : 0),
+    progressMessage:
+      payload.progressMessage ??
+      payload.currentStep ??
+      payload.current_step ??
+      previous?.progressMessage,
+    result,
+    error,
+    createdAt,
+    startedAt,
+    completedAt,
+    estimatedDuration,
+    actualDuration,
+    projectId: payload.projectId ?? payload.project_id ?? previous?.projectId,
+    userId:
+      payload.userId ??
+      payload.user_id ??
+      previous?.userId ??
+      fallbackUserId ??
+      "",
+    parameters,
+    retryCount,
+    maxRetries,
+    canRetry,
+  };
+}
 
 interface TaskMonitoringState {
   tasks: Map<ID, Task>;
@@ -65,37 +387,40 @@ export function useTaskMonitoring(options: TaskMonitoringOptions = {}) {
     WS_CHANNELS.TASK_PROGRESS,
     useCallback(
       (message: WebSocketMessage<TaskProgressMessage>) => {
-        const taskData = message.data;
+        const fallbackUserId = userId ?? getStoredUserId();
 
         setState((prevState) => {
           const newTasks = new Map(prevState.tasks);
-          const existingTask = newTasks.get(taskData.taskId);
+          const existingTask = newTasks.get(
+            (message.data.taskId ?? message.data.task_id) as ID
+          );
 
-          const updatedTask: Task = {
-            ...existingTask,
-            id: taskData.taskId,
-            type: taskData.type,
-            status: taskData.status,
-            progress: taskData.progress,
-            progressMessage: taskData.progressMessage,
-            estimatedDuration: taskData.estimatedTimeRemaining,
-            // Preserve existing task data
-            createdAt: existingTask?.createdAt || new Date().toISOString(),
-            userId: existingTask?.userId || userId || "",
-            parameters: existingTask?.parameters || {},
-            retryCount: existingTask?.retryCount || 0,
-            maxRetries: existingTask?.maxRetries || 3,
-            canRetry: existingTask?.canRetry || true,
-          };
+          const normalizedTask = normalizeTaskPayload(
+            {
+              ...message.data,
+              id: (message.data.taskId ?? message.data.task_id) as ID,
+              progressMessage:
+                message.data.progressMessage ?? message.data.currentStep,
+            },
+            existingTask,
+            fallbackUserId
+          );
 
-          newTasks.set(taskData.taskId, updatedTask);
+          if (!normalizedTask) {
+            return prevState;
+          }
+
+          newTasks.set(normalizedTask.id, normalizedTask);
+
+          const allTasks = Array.from(newTasks.values());
+          const activeTasks = allTasks.filter((task) =>
+            ["running", "pending", "retrying"].includes(task.status)
+          );
 
           return {
             ...prevState,
             tasks: newTasks,
-            activeTasks: Array.from(newTasks.values()).filter(
-              (task) => task.status === "running" || task.status === "pending"
-            ),
+            activeTasks,
             lastUpdated: new Date().toISOString(),
           };
         });
@@ -115,62 +440,50 @@ export function useTaskMonitoring(options: TaskMonitoringOptions = {}) {
     WS_CHANNELS.TASK_COMPLETE,
     useCallback(
       (message: WebSocketMessage<TaskCompleteMessage>) => {
-        const taskData = message.data;
+        const fallbackUserId = userId ?? getStoredUserId();
 
         setState((prevState) => {
           const newTasks = new Map(prevState.tasks);
-          const existingTask = newTasks.get(taskData.taskId);
+          const existingTask = newTasks.get(
+            (message.data.taskId ?? message.data.task_id) as ID
+          );
 
-          const completedTask: Task = {
-            ...existingTask,
-            id: taskData.taskId,
-            type: taskData.type,
-            status: taskData.status,
+          const normalizedTask = normalizeTaskPayload(
+            {
+              ...message.data,
+              id: (message.data.taskId ?? message.data.task_id) as ID,
+              result: message.data.result ?? message.data.finalStatistics,
+            },
+            existingTask,
+            fallbackUserId
+          );
+
+          if (!normalizedTask) {
+            return prevState;
+          }
+
+          const taskWithCompletion: Task = {
+            ...normalizedTask,
             progress: 100,
-            result: taskData.result
-              ? {
-                  success: taskData.status === "completed",
-                  message:
-                    taskData.status === "completed"
-                      ? "Task completed successfully"
-                      : "Task failed",
-                  data: taskData.result,
-                  statistics: taskData.finalStatistics
-                    ? {
-                        totalItems: taskData.finalStatistics.itemsTotal,
-                        processedItems: taskData.finalStatistics.itemsProcessed,
-                        successfulItems: taskData.finalStatistics.successCount,
-                        failedItems: taskData.finalStatistics.errorCount,
-                        skippedItems: taskData.finalStatistics.warningCount,
-                        duration: taskData.duration,
-                      }
-                    : undefined,
-                }
-              : undefined,
-            error: taskData.error
-              ? {
-                  code: "TASK_ERROR",
-                  message: String(taskData.error),
-                  retryable: taskData.status !== "cancelled",
-                }
-              : undefined,
-            completedAt: new Date().toISOString(),
-            actualDuration: taskData.duration,
-            // Preserve existing task data
-            createdAt: existingTask?.createdAt || new Date().toISOString(),
-            userId: existingTask?.userId || userId || "",
-            parameters: existingTask?.parameters || {},
-            retryCount: existingTask?.retryCount || 0,
-            maxRetries: existingTask?.maxRetries || 3,
-            canRetry:
-              (existingTask?.canRetry ?? true) && taskData.status === "failed",
+            completedAt: normalizedTask.completedAt || new Date().toISOString(),
+            actualDuration:
+              normalizedTask.actualDuration ?? message.data.duration,
+            result: normalizeTaskResult(
+              message.data.result ?? normalizedTask.result,
+              normalizedTask.status,
+              normalizedTask.result
+            ),
+            error: normalizeTaskError(
+              message.data.error ?? normalizedTask.error,
+              normalizedTask.error
+            ),
           };
 
-          newTasks.set(taskData.taskId, completedTask);
+          newTasks.set(taskWithCompletion.id, taskWithCompletion);
 
           const allTasks = Array.from(newTasks.values());
-          const activeTasks = allTasks.filter(
-            (task) => task.status === "running" || task.status === "pending"
+          const activeTasks = allTasks.filter((task) =>
+            ["running", "pending", "retrying"].includes(task.status)
           );
           const completedTasks = allTasks
             .filter((task) => task.status === "completed")
@@ -225,22 +538,41 @@ export function useTaskMonitoring(options: TaskMonitoringOptions = {}) {
         "🔍 API Call Debug - Endpoint: /tasks/user/, Base URL:",
         config.apiUrl
       );
-      const response = await apiClient.get<Task[]>(
+      const response = await apiClient.get<unknown[]>(
         API_ENDPOINTS.TASKS.USER,
         params
       );
 
       if (response.success) {
         setState((prevState) => {
+          const fallbackUserId = userId ?? getStoredUserId();
           const newTasks = new Map<ID, Task>();
 
-          response.data.forEach((task) => {
-            newTasks.set(task.id, task);
+          const rawTasks = Array.isArray(response.data)
+            ? (response.data as RawTaskPayload[])
+            : [];
+
+          rawTasks.forEach((rawTask) => {
+            const rawId =
+              (rawTask.task_id as ID) || rawTask.taskId || (rawTask.id as ID);
+            const existingTask = rawId
+              ? prevState.tasks.get(rawId)
+              : undefined;
+
+            const normalized = normalizeTaskPayload(
+              { ...rawTask, id: rawId },
+              existingTask,
+              fallbackUserId
+            );
+
+            if (normalized) {
+              newTasks.set(normalized.id, normalized);
+            }
           });
 
           const allTasks = Array.from(newTasks.values());
-          const activeTasks = allTasks.filter(
-            (task) => task.status === "running" || task.status === "pending"
+          const activeTasks = allTasks.filter((task) =>
+            ["running", "pending", "retrying"].includes(task.status)
           );
           const completedTasks = allTasks
             .filter((task) => task.status === "completed")
@@ -425,6 +757,7 @@ export function useTaskProgress(
   const [error, setError] = useState<string | null>(null);
   const pollingIntervalRef = useRef<number | null>(null);
   const lastTaskIdRef = useRef<ID | null>(null);
+  const initialFetchTimeoutRef = useRef<number | null>(null);
 
   const pollInterval = options.pollInterval ?? 5000;
 
@@ -435,17 +768,25 @@ export function useTaskProgress(
     }
   }, []);
 
-  const mergeTaskUpdate = useCallback((update: Partial<Task>) => {
+  const mergeTaskUpdate = useCallback((update: RawTaskPayload) => {
     setTask((prevTask) => {
-      const nextTask = {
-        ...prevTask,
-        ...update,
-        progress:
-          update.progress ?? prevTask?.progress ?? (update.status === "completed" ? 100 : 0),
-        progressMessage:
-          update.progressMessage ?? prevTask?.progressMessage ?? undefined,
-      } as Task;
-      return nextTask;
+      const resolvedId =
+        (update.id as ID) || update.taskId || update.task_id || prevTask?.id;
+
+      const normalized = normalizeTaskPayload(
+        {
+          ...update,
+          id: resolvedId as ID,
+        },
+        prevTask ?? undefined,
+        update.user_id ?? update.userId ?? prevTask?.userId ?? getStoredUserId()
+      );
+
+      if (!normalized) {
+        return prevTask ?? null;
+      }
+
+      return normalized;
     });
   }, []);
 
@@ -460,19 +801,38 @@ export function useTaskProgress(
       }
 
       try {
-        const response = await apiClient.get<Task>(
+        const response = await apiClient.get<unknown>(
           API_ENDPOINTS.TASKS.STATUS(taskId)
         );
 
         if (response.success && response.data) {
-          mergeTaskUpdate(response.data);
+          const rawTask = response.data as RawTaskPayload;
+          mergeTaskUpdate({
+            ...rawTask,
+            id:
+              (rawTask.task_id as ID) ||
+              (rawTask.taskId as ID) ||
+              (rawTask.id as ID) ||
+              (taskId as ID),
+          });
           setError(null);
         }
       } catch (err) {
-        console.error(`Failed to fetch task ${taskId}:`, err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load task status"
-        );
+        if (err instanceof ApiClientError && err.status === 404) {
+          // TaskProgress record may not exist yet; treat as pending and keep polling
+          mergeTaskUpdate({
+            id: taskId as ID,
+            status: "pending",
+            progress: 0,
+            progressMessage: "Waiting for task to start...",
+          });
+          setError(null);
+        } else {
+          console.error(`Failed to fetch task ${taskId}:`, err);
+          setError(
+            err instanceof Error ? err.message : "Failed to load task status"
+          );
+        }
       } finally {
         if (showLoading) {
           setIsLoading(false);
@@ -493,13 +853,23 @@ export function useTaskProgress(
     setError(null);
     setIsLoading(false);
     clearPolling();
+    if (initialFetchTimeoutRef.current) {
+      clearTimeout(initialFetchTimeoutRef.current);
+      initialFetchTimeoutRef.current = null;
+    }
 
     if (taskId) {
-      fetchTaskStatus(true);
+      initialFetchTimeoutRef.current = window.setTimeout(() => {
+        fetchTaskStatus(true);
+      }, 500);
     }
 
     return () => {
       clearPolling();
+      if (initialFetchTimeoutRef.current) {
+        clearTimeout(initialFetchTimeoutRef.current);
+        initialFetchTimeoutRef.current = null;
+      }
     };
   }, [taskId, fetchTaskStatus, clearPolling]);
 
@@ -532,11 +902,11 @@ export function useTaskProgress(
       }
 
       mergeTaskUpdate({
-        id: message.data.taskId,
-        type: message.data.type,
-        status: message.data.status,
-        progress: message.data.progress,
-        progressMessage: message.data.progressMessage,
+        ...message.data,
+        id: (message.data.taskId ?? message.data.task_id ?? taskId) as ID,
+        progressMessage:
+          message.data.progressMessage ?? message.data.currentStep ??
+          undefined,
         estimatedDuration: message.data.estimatedTimeRemaining,
       });
       setError(null);
@@ -551,27 +921,11 @@ export function useTaskProgress(
       }
 
       mergeTaskUpdate({
-        id: message.data.taskId,
-        type: message.data.type,
-        status: message.data.status,
+        ...message.data,
+        id: (message.data.taskId ?? message.data.task_id ?? taskId) as ID,
         progress: 100,
-        result: message.data.result
-          ? {
-              success: message.data.status === "completed",
-              message:
-                message.data.status === "completed"
-                  ? "Task completed successfully"
-                  : "Task failed",
-              data: message.data.result,
-            }
-          : undefined,
-        error: message.data.error
-          ? {
-              code: "TASK_ERROR",
-              message: String(message.data.error),
-              retryable: message.data.status !== "cancelled",
-            }
-          : undefined,
+        result: message.data.result,
+        error: message.data.error,
         completedAt: new Date().toISOString(),
         actualDuration: message.data.duration,
       });

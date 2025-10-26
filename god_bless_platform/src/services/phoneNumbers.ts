@@ -129,7 +129,9 @@ class PhoneNumberServiceClass {
             parameters: params,
             retryCount: 0,
             maxRetries: 3,
-            canRetry: true
+            canRetry: true,
+            progressMessage:
+              backendResponse.data.data.message || backendResponse.data.message
           } as Task
         }
         
