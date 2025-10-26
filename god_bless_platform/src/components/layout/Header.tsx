@@ -3,10 +3,14 @@
  * Top navigation header with user menu and controls
  */
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../../contexts/AuthContext'
+import { useProject } from '../../contexts'
 import { Button } from '../common/Button'
 import { ThemeToggle } from '../common/ThemeToggle'
+import { projectService } from '../../services'
+import type { Project } from '../../types'
 
 interface HeaderProps {
   onSidebarToggle: () => void
@@ -20,11 +24,65 @@ interface HeaderProps {
  * Main application header with responsive design
  */
 export function Header({ onSidebarToggle, sidebarCollapsed, isMobile = false, className = '' }: HeaderProps) {
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const {
+    currentProject,
+    currentProjectId,
+    isLoading: isProjectLoading,
+    isReady: isProjectReady,
+    error: projectContextError,
+    selectProject
+  } = useProject()
   const [userMenuOpen, setUserMenuOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [projectMenuOpen, setProjectMenuOpen] = useState(false)
+  const [projectList, setProjectList] = useState<Project[]>([])
+  const [isProjectListLoading, setIsProjectListLoading] = useState(false)
+  const [projectListError, setProjectListError] = useState<string | null>(null)
   const userMenuRef = useRef<HTMLDivElement>(null)
   const notificationsRef = useRef<HTMLDivElement>(null)
+  const projectMenuRef = useRef<HTMLDivElement>(null)
+  const isMountedRef = useRef(true)
+
+  const fetchProjectList = useCallback(async () => {
+    setIsProjectListLoading(true)
+    setProjectListError(null)
+
+    try {
+      const response = await projectService.getProjects({ pageSize: 50 })
+
+      if (!isMountedRef.current) {
+        return
+      }
+
+      if (response.success) {
+        const data = response.data as Record<string, unknown>
+        const results = Array.isArray((data as any)?.results)
+          ? ((data as any).results as Project[])
+          : Array.isArray((data as any)?.projects)
+            ? ((data as any).projects as Project[])
+            : Array.isArray(data)
+              ? (data as unknown as Project[])
+              : []
+
+        setProjectList(results)
+      } else {
+        setProjectList([])
+        setProjectListError(response.message || 'Failed to load projects')
+      }
+    } catch (error) {
+      if (!isMountedRef.current) {
+        return
+      }
+      console.error('Project switcher failed to load projects:', error)
+      setProjectListError(error instanceof Error ? error.message : 'Failed to load projects')
+    } finally {
+      if (isMountedRef.current) {
+        setIsProjectListLoading(false)
+      }
+    }
+  }, [])
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -35,11 +93,38 @@ export function Header({ onSidebarToggle, sidebarCollapsed, isMobile = false, cl
       if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
         setNotificationsOpen(false)
       }
+      if (projectMenuRef.current && !projectMenuRef.current.contains(event.target as Node)) {
+        setProjectMenuOpen(false)
+      }
     }
 
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  useEffect(() => () => {
+    isMountedRef.current = false
+  }, [])
+
+  useEffect(() => {
+    fetchProjectList()
+  }, [fetchProjectList])
+
+  useEffect(() => {
+    if (!currentProject) {
+      return
+    }
+
+    setProjectList(prev => {
+      const exists = prev.some(project => project.id === currentProject.id)
+
+      if (exists) {
+        return prev.map(project => (project.id === currentProject.id ? currentProject : project))
+      }
+
+      return [currentProject, ...prev]
+    })
+  }, [currentProject])
 
   const handleLogout = async () => {
     try {
@@ -48,6 +133,37 @@ export function Header({ onSidebarToggle, sidebarCollapsed, isMobile = false, cl
       console.error('Logout failed:', error)
     }
   }
+
+  const handleProjectSelect = async (projectId: string) => {
+    try {
+      const project = projectList.find(item => item.id === projectId)
+      await selectProject(project ?? projectId)
+      setProjectMenuOpen(false)
+    } catch (error) {
+      console.error('Failed to switch project:', error)
+      setProjectListError(error instanceof Error ? error.message : 'Failed to switch project')
+    }
+  }
+
+  const handleProjectSwitcherToggle = () => {
+    setProjectMenuOpen(prev => !prev)
+    if (!projectMenuOpen && !isProjectListLoading && projectList.length === 0) {
+      fetchProjectList()
+    }
+  }
+
+  const handleManageProjects = () => {
+    setProjectMenuOpen(false)
+    navigate('/projects')
+  }
+
+  const projectErrorMessage = projectListError || projectContextError || null
+  const baseProjectName = currentProject?.project_name || currentProject?.name
+  const projectDisplayName =
+    baseProjectName || (!isProjectReady && isProjectLoading ? 'Loading project…' : 'Select Project')
+  const truncatedProjectName =
+    projectDisplayName.length > 26 ? `${projectDisplayName.slice(0, 23)}…` : projectDisplayName
+  const hasActiveProject = Boolean(currentProjectId)
 
   return (
     <header 
@@ -99,18 +215,130 @@ export function Header({ onSidebarToggle, sidebarCollapsed, isMobile = false, cl
           </div>
         </div>
 
-        {/* Mobile Search Button */}
-        <div className="md:hidden ml-auto mr-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="p-2"
-            aria-label="Search"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-            </svg>
-          </Button>
+        <div className="flex items-center gap-2 ml-auto md:ml-4">
+          <div className="relative" ref={projectMenuRef}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleProjectSwitcherToggle}
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200"
+              aria-haspopup="listbox"
+              aria-expanded={projectMenuOpen}
+              aria-label={hasActiveProject ? `Active project ${projectDisplayName}` : 'Select project'}
+            >
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-full ${
+                  hasActiveProject
+                    ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-300'
+                    : 'bg-gray-200 text-gray-600 dark:bg-gray-700 dark:text-gray-300'
+                }`}
+              >
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7l9-4 9 4-9 4-9-4zm0 6l9 4 9-4" />
+                </svg>
+              </span>
+              <span className="hidden sm:inline-block max-w-[160px] truncate">
+                {truncatedProjectName}
+              </span>
+              <span className="sm:hidden inline-block max-w-[120px] truncate">
+                {truncatedProjectName}
+              </span>
+              {isProjectLoading || isProjectListLoading ? (
+                <span className="ml-1 flex h-4 w-4 items-center justify-center">
+                  <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></span>
+                </span>
+              ) : (
+                <svg
+                  className={`h-4 w-4 transition-transform ${projectMenuOpen ? 'rotate-180' : ''}`}
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              )}
+            </Button>
+
+            {projectMenuOpen && (
+              <div className="absolute left-0 z-50 mt-2 w-72 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
+                <div className="border-b border-gray-200 px-4 py-3 dark:border-gray-700">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Current project</p>
+                  <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {hasActiveProject ? baseProjectName ?? 'Unnamed project' : 'No project selected'}
+                  </p>
+                  {projectErrorMessage && (
+                    <p className="mt-2 text-xs text-red-500 dark:text-red-400">{projectErrorMessage}</p>
+                  )}
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {isProjectListLoading && projectList.length === 0 ? (
+                    <div className="flex items-center justify-center gap-2 px-4 py-6 text-sm text-gray-500 dark:text-gray-400">
+                      <span className="h-4 w-4 animate-spin rounded-full border-2 border-blue-500 border-t-transparent"></span>
+                      Loading projects…
+                    </div>
+                  ) : projectList.length > 0 ? (
+                    projectList.map(project => {
+                      const name = project.project_name || (project as { name?: string }).name || 'Untitled project'
+                      return (
+                        <button
+                          key={project.id}
+                          type="button"
+                          onClick={() => handleProjectSelect(project.id)}
+                          className={`w-full px-4 py-2 text-left text-sm transition-colors ${
+                            project.id === currentProjectId
+                              ? 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-200'
+                              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{name}</span>
+                            {project.id === currentProjectId && (
+                              <span className="text-xs font-semibold text-blue-600 dark:text-blue-300">Active</span>
+                            )}
+                          </div>
+                          {project.description && (
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
+                              {project.description}
+                            </p>
+                          )}
+                        </button>
+                      )
+                    })
+                  ) : (
+                    <div className="px-4 py-3 text-sm text-gray-500 dark:text-gray-400">
+                      {projectErrorMessage ?? 'No projects available. Create one to get started.'}
+                    </div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between gap-2 border-t border-gray-200 px-4 py-3 dark:border-gray-700">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={fetchProjectList}
+                    disabled={isProjectListLoading}
+                  >
+                    Refresh
+                  </Button>
+                  <Button variant="ghost" size="sm" onClick={handleManageProjects}>
+                    Manage Projects
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="md:hidden">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-2"
+              aria-label="Search"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </Button>
+          </div>
         </div>
       </div>
 

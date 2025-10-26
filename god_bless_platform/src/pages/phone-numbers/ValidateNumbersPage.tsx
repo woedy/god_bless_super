@@ -8,9 +8,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { NumberValidator } from '../../components/phone-numbers'
 import { Card } from '../../components/common'
-import { projectService } from '../../services'
+import { useProject } from '../../contexts'
 import type { BreadcrumbItem } from '../../types/ui'
-import type { Project } from '../../types'
 
 const breadcrumbs: BreadcrumbItem[] = [
   {
@@ -34,49 +33,41 @@ const breadcrumbs: BreadcrumbItem[] = [
 export function ValidateNumbersPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const projectId = searchParams.get('project')
+  const requestedProjectId = searchParams.get('project')
 
-  // State
-  const [project, setProject] = useState<Project | null>(null)
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const {
+    currentProject,
+    currentProjectId,
+    isReady: isProjectReady,
+    isLoading: isProjectLoading,
+    error: projectContextError,
+    selectProject,
+    refreshCurrentProject
+  } = useProject()
+
   const [error, setError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
 
-  // Load project data
   useEffect(() => {
-    const loadProject = async () => {
-      if (!projectId) {
-        // Redirect to main phone numbers page for project selection
-        navigate('/phone-numbers?redirected=true')
-        return
-      }
-
-      try {
-        setIsLoading(true)
-        const response = await projectService.getProject(projectId)
-        
-        if (response.success) {
-          setProject(response.data)
-        } else {
-          setError('Failed to load project details')
-        }
-      } catch (err) {
-        console.error('Failed to load project:', err)
-        setError('Failed to load project details')
-      } finally {
-        setIsLoading(false)
-      }
+    if (!requestedProjectId || !isProjectReady) {
+      return
     }
 
-    loadProject()
-  }, [projectId, navigate])
+    if (requestedProjectId !== currentProjectId) {
+      void selectProject(requestedProjectId)
+    }
+  }, [requestedProjectId, currentProjectId, isProjectReady, selectProject])
 
   const handleValidationComplete = (_taskId: string) => {
     setSuccessMessage('Phone number validation completed successfully!')
-    
+
+    if (currentProjectId) {
+      void refreshCurrentProject()
+    }
+
     // Navigate to the numbers list after a short delay
     setTimeout(() => {
-      navigate(`/phone-numbers/list?project=${projectId}`)
+      navigate('/phone-numbers/list')
     }, 2000)
   }
 
@@ -90,7 +81,9 @@ export function ValidateNumbersPage() {
     setSuccessMessage(null)
   }
 
-  if (isLoading) {
+  const isProjectSelectionLoading = !isProjectReady || (isProjectLoading && !currentProject)
+
+  if (isProjectSelectionLoading) {
     return (
       <AppLayout breadcrumbs={breadcrumbs}>
         <div className="flex items-center justify-center min-h-64">
@@ -100,7 +93,7 @@ export function ValidateNumbersPage() {
     )
   }
 
-  if (!project) {
+  if (!currentProject) {
     return (
       <AppLayout breadcrumbs={breadcrumbs}>
         <Card className="p-8 text-center">
@@ -111,20 +104,20 @@ export function ValidateNumbersPage() {
           </div>
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Project Not Found</h2>
           <p className="text-gray-600 mb-6">
-            {error || 'The selected project could not be found or you do not have access to it.'}
+            {projectContextError || error || 'Select a project to validate phone numbers.'}
           </p>
           <div className="flex justify-center gap-3">
             <button
-              onClick={() => navigate('/projects')}
+              onClick={() => navigate('/phone-numbers')}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
             >
-              Select Project
+              Go to Phone Numbers
             </button>
             <button
-              onClick={() => navigate('/phone-numbers')}
+              onClick={() => navigate('/projects')}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
             >
-              Back to Phone Numbers
+              Manage Projects
             </button>
           </div>
         </Card>
@@ -140,7 +133,7 @@ export function ValidateNumbersPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Validate Phone Numbers</h1>
             <p className="text-gray-600 mt-1">
-              Validate phone numbers for project "{project.project_name}"
+              Validate phone numbers for project "{currentProject.project_name}"
             </p>
           </div>
           <button
@@ -213,11 +206,11 @@ export function ValidateNumbersPage() {
             </div>
             <div className="ml-3">
               <p className="text-sm text-blue-800">
-                <span className="font-medium">Current Project:</span> {project.project_name}
-                {project.phone_stats && (
+                <span className="font-medium">Current Project:</span> {currentProject.project_name}
+                {currentProject.phone_stats && (
                   <span className="ml-4">
-                    Total Numbers: {project.phone_stats.total.toLocaleString()} 
-                    ({project.phone_stats.valid.toLocaleString()} valid, {project.phone_stats.invalid.toLocaleString()} invalid)
+                    Total Numbers: {currentProject.phone_stats.total.toLocaleString()}
+                    ({currentProject.phone_stats.valid.toLocaleString()} valid, {currentProject.phone_stats.invalid.toLocaleString()} invalid)
                   </span>
                 )}
               </p>
@@ -227,7 +220,7 @@ export function ValidateNumbersPage() {
 
         {/* Number Validator Component */}
         <NumberValidator
-          project={project}
+          project={currentProject}
           onValidationComplete={handleValidationComplete}
           onError={handleError}
         />
