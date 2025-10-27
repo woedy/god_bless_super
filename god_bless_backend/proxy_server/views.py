@@ -69,6 +69,84 @@ def add_proxy_view(request):
     return Response(payload, status=status.HTTP_201_CREATED)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def update_proxy_view(request):
+    """Update an existing proxy server configuration."""
+    payload = {}
+    errors = {}
+
+    user_id = request.data.get('user_id', '')
+    proxy_id = request.data.get('id')
+
+    if not user_id:
+        errors['user_id'] = ['User ID is required.']
+    if not proxy_id:
+        errors['id'] = ['Proxy ID is required.']
+
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        user = User.objects.get(user_id=user_id)
+        proxy = ProxyServer.objects.get(id=proxy_id, user=user)
+    except User.DoesNotExist:
+        errors['user_id'] = ['User does not exist.']
+    except ProxyServer.DoesNotExist:
+        errors['id'] = ['Proxy does not exist.']
+
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    update_payload = {}
+
+    for field in ['host', 'username', 'password', 'protocol']:
+        if field in request.data:
+            update_payload[field] = request.data[field]
+
+    if 'port' in request.data:
+        try:
+            update_payload['port'] = int(request.data['port'])
+        except (TypeError, ValueError):
+            errors['port'] = ['Port must be a valid integer.']
+
+    if 'is_active' in request.data:
+        raw_is_active = request.data['is_active']
+        if isinstance(raw_is_active, bool):
+            update_payload['is_active'] = raw_is_active
+        elif isinstance(raw_is_active, str):
+            lowered = raw_is_active.lower()
+            if lowered in ['true', '1', 'yes', 'on']:
+                update_payload['is_active'] = True
+            elif lowered in ['false', '0', 'no', 'off']:
+                update_payload['is_active'] = False
+            else:
+                errors['is_active'] = ['is_active must be true or false.']
+        else:
+            update_payload['is_active'] = bool(raw_is_active)
+
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    for field, value in update_payload.items():
+        setattr(proxy, field, value)
+
+    proxy.save()
+
+    serializer = ProxyServerSerializer(proxy)
+    payload['message'] = 'Successful'
+    payload['data'] = serializer.data
+
+    return Response(payload, status=status.HTTP_200_OK)
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
