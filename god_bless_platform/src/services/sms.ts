@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './api'
+import { authService } from './auth'
 import type {
   ApiResponse,
   CreateCampaignData,
