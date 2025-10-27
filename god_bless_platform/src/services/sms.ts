@@ -227,6 +227,13 @@ export class SMSService {
   }
 
   /**
+   * Delete an SMTP account owned by the authenticated user
+   */
+  async deleteSmtpAccount(accountId: number | string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/smtp-manager/api/${accountId}/`)
+  }
+
+  /**
    * Get proxy servers available to the authenticated user
    */
   async getProxyServers(): Promise<ApiResponse<any[]>> {

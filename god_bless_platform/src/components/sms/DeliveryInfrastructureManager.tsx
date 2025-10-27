@@ -116,10 +116,12 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
   const [smtpForm, setSmtpForm] = useState<SmtpFormState>(SMTP_DEFAULT)
   const [smtpSaving, setSmtpSaving] = useState(false)
   const [smtpFeedback, setSmtpFeedback] = useState<string | null>(null)
+  const [smtpDeletingId, setSmtpDeletingId] = useState<number | null>(null)
 
   const [proxyForm, setProxyForm] = useState<ProxyFormState>(PROXY_DEFAULT)
   const [proxySaving, setProxySaving] = useState(false)
   const [proxyFeedback, setProxyFeedback] = useState<string | null>(null)
+  const [proxyDeletingId, setProxyDeletingId] = useState<number | null>(null)
 
   const [rotationSaving, setRotationSaving] = useState(false)
   const [rotationFeedback, setRotationFeedback] = useState<string | null>(null)
@@ -285,6 +287,72 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
       setProxyFeedback('Failed to save proxy server. Please verify the host and port.')
     } finally {
       setProxySaving(false)
+    }
+  }
+
+  const confirmAction = (message: string) => {
+    if (typeof window === 'undefined') {
+      return true
+    }
+
+    if (typeof window.confirm === 'function') {
+      return window.confirm(message)
+    }
+
+    return true
+  }
+
+  const handleDeleteSmtpAccount = async (accountId: number) => {
+    if (!confirmAction('Remove this SMTP account from your delivery infrastructure?')) {
+      return
+    }
+
+    setSmtpDeletingId(accountId)
+    setSmtpFeedback(null)
+    try {
+      const response = await smsService.deleteSmtpAccount(accountId)
+      if (response.success) {
+        if (smtpForm.id === accountId) {
+          setSmtpForm(SMTP_DEFAULT)
+        }
+        await loadInfrastructure()
+        setSmtpFeedback('SMTP account removed.')
+        onUpdated?.()
+      } else {
+        setSmtpFeedback('Unable to delete SMTP account. Please try again.')
+      }
+    } catch (error) {
+      console.error('Failed to delete SMTP account', error)
+      setSmtpFeedback('Failed to delete SMTP account. Please try again.')
+    } finally {
+      setSmtpDeletingId(null)
+    }
+  }
+
+  const handleDeleteProxyServer = async (proxyId: number) => {
+    if (!confirmAction('Remove this proxy from your delivery infrastructure?')) {
+      return
+    }
+
+    setProxyDeletingId(proxyId)
+    setProxyFeedback(null)
+    try {
+      const response = await smsService.deleteProxyServer(proxyId)
+      if (response.success) {
+        if (proxyForm.id === proxyId) {
+          setProxyForm(PROXY_DEFAULT)
+        }
+        await loadInfrastructure()
+        setProxyFeedback('Proxy server removed.')
+        onUpdated?.()
+      } else {
+        setProxyFeedback('Unable to delete proxy server. Please try again.')
+      }
+    } catch (error) {
+      console.error('Failed to delete proxy server', error)
+      setProxyFeedback('Failed to delete proxy server. Please try again.')
+    } finally {
+      setProxyDeletingId(null)
     }
   }
 
@@ -575,13 +643,23 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
                   {account.username ? `User: ${account.username}` : 'Anonymous'} · {account.active ? 'Active' : 'Disabled'}
                 </div>
               </div>
-              <button
-                type="button"
-                className="text-sm font-medium text-blue-600 hover:underline"
-                onClick={() => startEditSmtp(account)}
-              >
-                Edit
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                  onClick={() => startEditSmtp(account)}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-red-600 hover:underline disabled:text-red-300"
+                  onClick={() => handleDeleteSmtpAccount(account.id)}
+                  disabled={smtpDeletingId === account.id}
+                >
+                  {smtpDeletingId === account.id ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
             </div>
           ))}
         </div>
@@ -731,13 +809,23 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
                   {proxy.protocol?.toUpperCase() ?? 'HTTP'} · {proxy.is_active ? 'Active' : 'Disabled'}
                 </div>
               </div>
-              <button
-                type="button"
-                className="text-sm font-medium text-blue-600 hover:underline"
-                onClick={() => startEditProxy(proxy)}
-              >
-                Edit
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  className="text-sm font-medium text-blue-600 hover:underline"
+                  onClick={() => startEditProxy(proxy)}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  className="text-sm font-medium text-red-600 hover:underline disabled:text-red-300"
+                  onClick={() => handleDeleteProxyServer(proxy.id)}
+                  disabled={proxyDeletingId === proxy.id}
+                >
+                  {proxyDeletingId === proxy.id ? 'Deleting…' : 'Delete'}
+                </button>
+              </div>
             </div>
           ))}
         </div>

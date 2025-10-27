@@ -177,7 +177,7 @@ class ConfigurationAPITestCase(TestCase):
     def test_server_health_list(self):
         """Test getting server health information"""
         url = '/api/sms-sender/api/server-health/'
-        
+
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
@@ -197,6 +197,65 @@ class ConfigurationAPITestCase(TestCase):
         self.assertEqual(smtp_data['port'], '587')
         self.assertTrue(smtp_data['is_healthy'])
         self.assertTrue(smtp_data['is_active'])
+
+    def test_smtp_manager_crud_scoped_to_authenticated_user(self):
+        """Authenticated users can manage their SMTP infrastructure without providing a user field."""
+        list_url = reverse('smtp_api:smtp-api-list')
+
+        create_payload = {
+            'host': 'newsmtp.example.com',
+            'port': '2525',
+            'username': 'relay@example.com',
+            'password': 'super-secret',
+            'ssl': True,
+            'tls': False,
+            'active': True
+        }
+
+        response = self.client.post(list_url, create_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_data = response.json()
+        self.assertEqual(created_data['host'], 'newsmtp.example.com')
+        self.assertEqual(created_data['port'], '2525')
+        self.assertTrue(created_data['ssl'])
+        self.assertIn('id', created_data)
+        self.assertEqual(created_data['user'], self.user.id)
+
+        self.assertTrue(
+            SmtpManager.objects.filter(user=self.user, host='newsmtp.example.com', port='2525').exists()
+        )
+
+        other_user = User.objects.create_user(
+            username='other',
+            email='other@example.com',
+            password='otherpass123'
+        )
+        SmtpManager.objects.create(
+            user=other_user,
+            host='outsider.example.com',
+            port='2526',
+            username='outsider',
+            password='password',
+            ssl=False,
+            tls=False,
+            active=True
+        )
+
+        list_response = self.client.get(list_url)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        listed_hosts = {entry['host'] for entry in list_response.json()}
+        self.assertIn('smtp.example.com', listed_hosts)
+        self.assertIn('newsmtp.example.com', listed_hosts)
+        self.assertNotIn('outsider.example.com', listed_hosts)
+
+        smtp_id = created_data['id']
+        detail_url = reverse('smtp_api:smtp-api-detail', args=[smtp_id])
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(
+            SmtpManager.objects.filter(id=smtp_id, user=self.user).exists()
+        )
     
     def test_server_health_summary(self):
         """Test getting server health summary"""
