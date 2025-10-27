@@ -33,6 +33,22 @@ interface ProxyFormState {
   is_active: boolean
 }
 
+interface RotationFormState {
+  id?: number
+  proxy_rotation_enabled: boolean
+  proxy_rotation_strategy: string
+  proxy_health_check_interval?: number
+  proxy_max_failures?: number
+  smtp_rotation_enabled: boolean
+  smtp_rotation_strategy: string
+  smtp_health_check_interval?: number
+  smtp_max_failures?: number
+  delivery_delay_enabled: boolean
+  delivery_delay_min: string
+  delivery_delay_max: string
+  delivery_delay_random_seed: string
+}
+
 const SMTP_DEFAULT: SmtpFormState = {
   host: '',
   port: '',
@@ -51,6 +67,29 @@ const PROXY_DEFAULT: ProxyFormState = {
   protocol: 'http',
   is_active: true
 }
+
+const ROTATION_DEFAULT: RotationFormState = {
+  proxy_rotation_enabled: true,
+  proxy_rotation_strategy: 'round_robin',
+  proxy_health_check_interval: 300,
+  proxy_max_failures: 3,
+  smtp_rotation_enabled: true,
+  smtp_rotation_strategy: 'round_robin',
+  smtp_health_check_interval: 300,
+  smtp_max_failures: 3,
+  delivery_delay_enabled: true,
+  delivery_delay_min: '1',
+  delivery_delay_max: '5',
+  delivery_delay_random_seed: ''
+}
+
+const rotationStrategyOptions = [
+  { value: 'round_robin', label: 'Round Robin' },
+  { value: 'random', label: 'Random' },
+  { value: 'least_used', label: 'Least Used' },
+  { value: 'best_performance', label: 'Best Performance' },
+  { value: 'smart_adaptive', label: 'Smart Adaptive' }
+]
 
 const protocolOptions = [
   { value: 'http', label: 'HTTP' },
@@ -72,6 +111,7 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
   const [infrastructureError, setInfrastructureError] = useState<string | null>(null)
   const [smtpAccounts, setSmtpAccounts] = useState<any[]>([])
   const [proxyServers, setProxyServers] = useState<any[]>([])
+  const [rotationForm, setRotationForm] = useState<RotationFormState>(ROTATION_DEFAULT)
 
   const [smtpForm, setSmtpForm] = useState<SmtpFormState>(SMTP_DEFAULT)
   const [smtpSaving, setSmtpSaving] = useState(false)
@@ -81,17 +121,49 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
   const [proxySaving, setProxySaving] = useState(false)
   const [proxyFeedback, setProxyFeedback] = useState<string | null>(null)
 
+  const [rotationSaving, setRotationSaving] = useState(false)
+  const [rotationFeedback, setRotationFeedback] = useState<string | null>(null)
+  const [rotationError, setRotationError] = useState<string | null>(null)
+
   const [developerFormat, setDeveloperFormat] = useState<'json' | 'csv'>('json')
   const [developerData, setDeveloperData] = useState('')
   const [developerStatus, setDeveloperStatus] = useState<string | null>(null)
   const [developerSummary, setDeveloperSummary] = useState<Record<string, any> | null>(null)
   const [developerProcessing, setDeveloperProcessing] = useState(false)
 
+  const buildRotationFormState = (raw: Record<string, any> | null | undefined): RotationFormState => ({
+    id: raw?.id,
+    proxy_rotation_enabled: raw?.proxy_rotation_enabled ?? true,
+    proxy_rotation_strategy: raw?.proxy_rotation_strategy ?? 'round_robin',
+    proxy_health_check_interval: raw?.proxy_health_check_interval ?? 300,
+    proxy_max_failures: raw?.proxy_max_failures ?? 3,
+    smtp_rotation_enabled: raw?.smtp_rotation_enabled ?? true,
+    smtp_rotation_strategy: raw?.smtp_rotation_strategy ?? 'round_robin',
+    smtp_health_check_interval: raw?.smtp_health_check_interval ?? 300,
+    smtp_max_failures: raw?.smtp_max_failures ?? 3,
+    delivery_delay_enabled: raw?.delivery_delay_enabled ?? true,
+    delivery_delay_min:
+      raw?.delivery_delay_min !== undefined && raw?.delivery_delay_min !== null
+        ? String(raw.delivery_delay_min)
+        : '1',
+    delivery_delay_max:
+      raw?.delivery_delay_max !== undefined && raw?.delivery_delay_max !== null
+        ? String(raw.delivery_delay_max)
+        : '5',
+    delivery_delay_random_seed:
+      raw?.delivery_delay_random_seed !== undefined && raw?.delivery_delay_random_seed !== null
+        ? String(raw.delivery_delay_random_seed)
+        : ''
+  })
+
   useEffect(() => {
     if (isActive) {
       setActiveView('guided')
       setSmtpForm(SMTP_DEFAULT)
       setProxyForm(PROXY_DEFAULT)
+      setRotationForm(ROTATION_DEFAULT)
+      setRotationFeedback(null)
+      setRotationError(null)
       loadInfrastructure()
     } else if (!isPageMode) {
       setDeveloperData('')
@@ -103,10 +175,13 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
   const loadInfrastructure = async () => {
     setLoadingInfrastructure(true)
     setInfrastructureError(null)
+    setRotationError(null)
+    setRotationFeedback(null)
     try {
-      const [smtpResponse, proxyResponse] = await Promise.all([
+      const [smtpResponse, proxyResponse, rotationResponse] = await Promise.all([
         smsService.getSmtpAccounts(),
-        smsService.getProxyServers()
+        smsService.getProxyServers(),
+        smsService.getRotationSettings()
       ])
 
       if (smtpResponse.success) {
@@ -116,14 +191,24 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
       }
 
       if (proxyResponse.success) {
-        const proxyData = (proxyResponse.data as { proxies?: any[] })?.proxies ?? []
+        const proxyData = Array.isArray(proxyResponse.data)
+          ? proxyResponse.data
+          : (proxyResponse.data as { proxies?: any[] })?.proxies ?? []
         setProxyServers(Array.isArray(proxyData) ? proxyData : [])
       } else {
         setProxyServers([])
       }
+
+      if (rotationResponse.success) {
+        setRotationForm(buildRotationFormState(rotationResponse.data as Record<string, any>))
+      } else {
+        setRotationForm(ROTATION_DEFAULT)
+        setRotationError('Unable to load delivery delay defaults for your account.')
+      }
     } catch (error) {
       console.error('Failed to load infrastructure', error)
       setInfrastructureError('Unable to load existing SMTP accounts and proxy servers.')
+      setRotationError('Unable to load delivery delay and rotation defaults.')
     } finally {
       setLoadingInfrastructure(false)
     }
@@ -200,6 +285,96 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
       setProxyFeedback('Failed to save proxy server. Please verify the host and port.')
     } finally {
       setProxySaving(false)
+    }
+  }
+
+  const handleRotationFieldChange = <K extends keyof RotationFormState>(
+    field: K,
+    value: RotationFormState[K]
+  ) => {
+    setRotationForm((prev) => ({
+      ...prev,
+      [field]: value
+    }))
+  }
+
+  const handleRotationSubmit = async (event: React.FormEvent) => {
+    event.preventDefault()
+    setRotationSaving(true)
+    setRotationFeedback(null)
+    setRotationError(null)
+
+    const minDelay = Number(rotationForm.delivery_delay_min)
+    const maxDelay = Number(rotationForm.delivery_delay_max)
+
+    if (rotationForm.delivery_delay_enabled) {
+      if (Number.isNaN(minDelay) || Number.isNaN(maxDelay)) {
+        setRotationError('Delivery delay range must contain numeric values.')
+        setRotationSaving(false)
+        return
+      }
+      if (minDelay < 0 || maxDelay < 0) {
+        setRotationError('Delivery delays must be zero or greater.')
+        setRotationSaving(false)
+        return
+      }
+      if (minDelay > maxDelay) {
+        setRotationError('Minimum delivery delay cannot exceed the maximum delay.')
+        setRotationSaving(false)
+        return
+      }
+    }
+
+    const payload: Record<string, unknown> = {
+      proxy_rotation_enabled: rotationForm.proxy_rotation_enabled,
+      proxy_rotation_strategy: rotationForm.proxy_rotation_strategy,
+      smtp_rotation_enabled: rotationForm.smtp_rotation_enabled,
+      smtp_rotation_strategy: rotationForm.smtp_rotation_strategy,
+      delivery_delay_enabled: rotationForm.delivery_delay_enabled,
+      delivery_delay_min: minDelay,
+      delivery_delay_max: maxDelay
+    }
+
+    if (rotationForm.proxy_health_check_interval !== undefined) {
+      payload.proxy_health_check_interval = rotationForm.proxy_health_check_interval
+    }
+    if (rotationForm.proxy_max_failures !== undefined) {
+      payload.proxy_max_failures = rotationForm.proxy_max_failures
+    }
+    if (rotationForm.smtp_health_check_interval !== undefined) {
+      payload.smtp_health_check_interval = rotationForm.smtp_health_check_interval
+    }
+    if (rotationForm.smtp_max_failures !== undefined) {
+      payload.smtp_max_failures = rotationForm.smtp_max_failures
+    }
+
+    const randomSeedRaw = rotationForm.delivery_delay_random_seed.trim()
+    if (randomSeedRaw.length > 0) {
+      const parsedSeed = Number(randomSeedRaw)
+      if (Number.isNaN(parsedSeed)) {
+        setRotationError('Delivery delay random seed must be a numeric value.')
+        setRotationSaving(false)
+        return
+      }
+      payload.delivery_delay_random_seed = parsedSeed
+    } else {
+      payload.delivery_delay_random_seed = null
+    }
+
+    try {
+      const response = await smsService.updateRotationSettings(payload)
+      if (response.success) {
+        setRotationFeedback('Delivery defaults updated.')
+        setRotationForm(buildRotationFormState(response.data as Record<string, any>))
+        onUpdated?.()
+      } else {
+        setRotationError('Unable to save delivery defaults. Please try again.')
+      }
+    } catch (error) {
+      console.error('Failed to save rotation settings', error)
+      setRotationError('Failed to save delivery defaults. Please try again.')
+    } finally {
+      setRotationSaving(false)
     }
   }
 
@@ -665,6 +840,136 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
                 {proxySaving ? 'Saving…' : proxyForm.id ? 'Update Proxy' : 'Add Proxy'}
               </button>
             </div>
+          </div>
+        </form>
+      </section>
+
+      <section className="space-y-4">
+        <header>
+          <h3 className="text-base font-semibold text-gray-900">Delivery delay &amp; rotation defaults</h3>
+          <p className="text-sm text-gray-500">
+            Tune the baseline rotation behaviour and pacing applied to new campaigns, bulk sends, and optimization flows.
+          </p>
+        </header>
+
+        <form className="space-y-4 rounded-lg border border-gray-200 bg-white p-4" onSubmit={handleRotationSubmit}>
+          <div className="flex flex-wrap items-center gap-4">
+            <label className="flex items-center space-x-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={rotationForm.proxy_rotation_enabled}
+                onChange={(event) => handleRotationFieldChange('proxy_rotation_enabled', event.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>Enable proxy rotation</span>
+            </label>
+            <label className="flex items-center space-x-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={rotationForm.smtp_rotation_enabled}
+                onChange={(event) => handleRotationFieldChange('smtp_rotation_enabled', event.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>Enable SMTP rotation</span>
+            </label>
+            <label className="flex items-center space-x-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                checked={rotationForm.delivery_delay_enabled}
+                onChange={(event) => handleRotationFieldChange('delivery_delay_enabled', event.target.checked)}
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+              />
+              <span>Enable delivery delay window</span>
+            </label>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium text-gray-700">
+              Proxy rotation strategy
+              <select
+                value={rotationForm.proxy_rotation_strategy}
+                onChange={(event) => handleRotationFieldChange('proxy_rotation_strategy', event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {rotationStrategyOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              SMTP rotation strategy
+              <select
+                value={rotationForm.smtp_rotation_strategy}
+                onChange={(event) => handleRotationFieldChange('smtp_rotation_strategy', event.target.value)}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                {rotationStrategyOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <label className="text-sm font-medium text-gray-700">
+              Minimum delivery delay (seconds)
+              <input
+                type="number"
+                min={0}
+                value={rotationForm.delivery_delay_min}
+                onChange={(event) => handleRotationFieldChange('delivery_delay_min', event.target.value)}
+                disabled={!rotationForm.delivery_delay_enabled}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Maximum delivery delay (seconds)
+              <input
+                type="number"
+                min={0}
+                value={rotationForm.delivery_delay_max}
+                onChange={(event) => handleRotationFieldChange('delivery_delay_max', event.target.value)}
+                disabled={!rotationForm.delivery_delay_enabled}
+                className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+              />
+            </label>
+          </div>
+
+          <label className="text-sm font-medium text-gray-700">
+            Delay random seed (optional)
+            <input
+              type="number"
+              value={rotationForm.delivery_delay_random_seed}
+              onChange={(event) => handleRotationFieldChange('delivery_delay_random_seed', event.target.value)}
+              disabled={!rotationForm.delivery_delay_enabled}
+              placeholder="Randomize automatically"
+              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500"
+            />
+            <span className="mt-1 block text-xs text-gray-500">
+              Provide a seed to reproduce delay behaviour when testing or debugging.
+            </span>
+          </label>
+
+          {rotationError && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">{rotationError}</div>
+          )}
+
+          {rotationFeedback && (
+            <div className="rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">{rotationFeedback}</div>
+          )}
+
+          <div className="flex items-center justify-end">
+            <button
+              type="submit"
+              disabled={rotationSaving}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+            >
+              {rotationSaving ? 'Saving…' : 'Save defaults'}
+            </button>
           </div>
         </form>
       </section>

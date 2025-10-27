@@ -102,7 +102,10 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
           }
 
           if (proxyResponse.success) {
-            setProxyServers(proxyResponse.data?.proxies ?? [])
+            const proxyData = Array.isArray(proxyResponse.data)
+              ? proxyResponse.data
+              : (proxyResponse.data as { proxies?: any[] })?.proxies ?? []
+            setProxyServers(proxyData)
           } else {
             setProxyServers([])
             setLoadError(prev => prev ?? 'Unable to load proxy pools for manual configuration.')

@@ -1,11 +1,12 @@
 """
 Proxy Server Management Views
 """
+from rest_framework import status, viewsets, permissions
 from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.authentication import TokenAuthentication
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from rest_framework import status
 from django.contrib.auth import get_user_model
 
 from .models import ProxyServer, RotationSettings
@@ -16,6 +17,27 @@ from .delivery_delay_service import DeliveryDelayService
 User = get_user_model()
 
 
+class ProxyServerViewSet(viewsets.ModelViewSet):
+    """Authenticated CRUD for proxy servers owned by the requesting user."""
+
+    serializer_class = ProxyServerSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return ProxyServer.objects.filter(user=self.request.user, is_archived=False).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def perform_update(self, serializer):
+        serializer.save(user=self.request.user)
+
+    def perform_destroy(self, instance):
+        if instance.user_id != self.request.user.id:
+            raise PermissionDenied("You do not have permission to delete this proxy server.")
+        instance.delete()
+
+
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
@@ -24,7 +46,6 @@ def add_proxy_view(request):
     payload = {}
     errors = {}
     
-    user_id = request.data.get('user_id', '')
     host = request.data.get('host', '')
     port = request.data.get('port', '')
     username = request.data.get('username', '')
@@ -32,8 +53,6 @@ def add_proxy_view(request):
     protocol = request.data.get('protocol', 'http')
     
     # Validate input
-    if not user_id:
-        errors['user_id'] = ['User ID is required.']
     if not host:
         errors['host'] = ['Host is required.']
     if not port:
@@ -44,17 +63,9 @@ def add_proxy_view(request):
         payload['errors'] = errors
         return Response(payload, status=status.HTTP_400_BAD_REQUEST)
     
-    try:
-        user = User.objects.get(user_id=user_id)
-    except User.DoesNotExist:
-        errors['user_id'] = ['User does not exist.']
-        payload['message'] = 'Errors'
-        payload['errors'] = errors
-        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-    
     # Create proxy
     proxy = ProxyServer.objects.create(
-        user=user,
+        user=request.user,
         host=host,
         port=int(port),
         username=username if username else None,
@@ -77,11 +88,8 @@ def update_proxy_view(request):
     payload = {}
     errors = {}
 
-    user_id = request.data.get('user_id', '')
     proxy_id = request.data.get('id')
 
-    if not user_id:
-        errors['user_id'] = ['User ID is required.']
     if not proxy_id:
         errors['id'] = ['Proxy ID is required.']
 
@@ -91,10 +99,7 @@ def update_proxy_view(request):
         return Response(payload, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        user = User.objects.get(user_id=user_id)
-        proxy = ProxyServer.objects.get(id=proxy_id, user=user)
-    except User.DoesNotExist:
-        errors['user_id'] = ['User does not exist.']
+        proxy = ProxyServer.objects.get(id=proxy_id, user=request.user)
     except ProxyServer.DoesNotExist:
         errors['id'] = ['Proxy does not exist.']
 
@@ -155,22 +160,7 @@ def get_proxies_view(request):
     payload = {}
     errors = {}
     
-    user_id = request.query_params.get('user_id', None)
-    
-    if not user_id:
-        errors['user_id'] = ['User ID is required.']
-    
-    try:
-        user = User.objects.get(user_id=user_id)
-    except User.DoesNotExist:
-        errors['user_id'] = ['User does not exist.']
-    
-    if errors:
-        payload['message'] = 'Errors'
-        payload['errors'] = errors
-        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-    
-    proxies = ProxyServer.objects.filter(user=user, is_archived=False).order_by('-created_at')
+    proxies = ProxyServer.objects.filter(user=request.user, is_archived=False).order_by('-created_at')
     serializer = ProxyServerSerializer(proxies, many=True)
     
     payload['message'] = 'Successful'
@@ -187,11 +177,8 @@ def delete_proxy_view(request):
     payload = {}
     errors = {}
     
-    user_id = request.data.get('user_id', '')
     proxy_id = request.data.get('id', '')
-    
-    if not user_id:
-        errors['user_id'] = ['User ID is required.']
+
     if not proxy_id:
         errors['id'] = ['Proxy ID is required.']
     
@@ -201,16 +188,13 @@ def delete_proxy_view(request):
         return Response(payload, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        user = User.objects.get(user_id=user_id)
-        proxy = ProxyServer.objects.get(id=proxy_id, user=user)
+        proxy = ProxyServer.objects.get(id=proxy_id, user=request.user)
         proxy.delete()
-        
+
         payload['message'] = 'Successful'
         payload['data'] = {}
         return Response(payload, status=status.HTTP_200_OK)
-        
-    except User.DoesNotExist:
-        errors['user_id'] = ['User does not exist.']
+
     except ProxyServer.DoesNotExist:
         errors['id'] = ['Proxy does not exist.']
     

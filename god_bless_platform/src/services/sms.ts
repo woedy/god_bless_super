@@ -229,10 +229,8 @@ export class SMSService {
   /**
    * Get proxy servers available to the authenticated user
    */
-  async getProxyServers(): Promise<ApiResponse<{ proxies: any[] }>> {
-    const user = await authService.getCurrentUser()
-    const userId = user.userId || user.id
-    return apiClient.get<{ proxies: any[] }>('/proxy-server/list/', { user_id: userId })
+  async getProxyServers(): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>('/proxy-server/api/')
   }
 
   /**
@@ -246,12 +244,22 @@ export class SMSService {
     protocol?: string
     is_active?: boolean
   }): Promise<ApiResponse<any>> {
-    const user = await authService.getCurrentUser()
-    const userId = user.userId || user.id
-    return apiClient.post<any>('/proxy-server/add/', {
-      user_id: userId,
-      ...proxy
-    })
+    const payload: Record<string, unknown> = {
+      host: proxy.host,
+      port: Number(proxy.port),
+      protocol: proxy.protocol ?? 'http',
+      is_active: proxy.is_active ?? true
+    }
+
+    if (proxy.username) {
+      payload.username = proxy.username
+    }
+
+    if (proxy.password) {
+      payload.password = proxy.password
+    }
+
+    return apiClient.post<any>('/proxy-server/api/', payload)
   }
 
   /**
@@ -268,13 +276,49 @@ export class SMSService {
       is_active: boolean
     }>
   ): Promise<ApiResponse<any>> {
-    const user = await authService.getCurrentUser()
-    const userId = user.userId || user.id
-    return apiClient.post<any>('/proxy-server/update/', {
-      user_id: userId,
-      id: proxyId,
-      ...updates
-    })
+    const payload: Record<string, unknown> = {}
+
+    if (updates.host !== undefined) {
+      payload.host = updates.host
+    }
+    if (updates.port !== undefined) {
+      payload.port = Number(updates.port)
+    }
+    if (updates.username !== undefined) {
+      payload.username = updates.username
+    }
+    if (updates.password !== undefined) {
+      payload.password = updates.password
+    }
+    if (updates.protocol !== undefined) {
+      payload.protocol = updates.protocol
+    }
+    if (updates.is_active !== undefined) {
+      payload.is_active = updates.is_active
+    }
+
+    return apiClient.patch<any>(`/proxy-server/api/${proxyId}/`, payload)
+  }
+
+  /**
+   * Delete a proxy server configuration
+   */
+  async deleteProxyServer(proxyId: number | string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/proxy-server/api/${proxyId}/`)
+  }
+
+  /**
+   * Retrieve rotation and delivery delay defaults for the authenticated user
+   */
+  async getRotationSettings(): Promise<ApiResponse<any>> {
+    return apiClient.get<any>('/sms-sender/api/rotation-settings/')
+  }
+
+  /**
+   * Update rotation and delivery delay defaults for the authenticated user
+   */
+  async updateRotationSettings(payload: Record<string, unknown>): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('/sms-sender/api/rotation-settings/', payload)
   }
 
   /**

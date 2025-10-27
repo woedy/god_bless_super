@@ -36,7 +36,7 @@ beforeEach(() => {
   })
   vi.spyOn(smsService, 'getProxyServers').mockResolvedValue({
     success: true,
-    data: { proxies: [{ id: 11, host: 'proxy.local', port: 8000, protocol: 'http', success_rate: 95 }] }
+    data: [{ id: 11, host: 'proxy.local', port: 8000, protocol: 'http', success_rate: 95 }]
   })
   vi.spyOn(smsService, 'processMessageTemplate').mockResolvedValue({
     success: true,
