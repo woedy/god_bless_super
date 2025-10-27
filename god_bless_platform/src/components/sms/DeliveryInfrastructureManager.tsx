@@ -6,9 +6,10 @@ import { smsService } from '../../services'
 type GuidedView = 'guided' | 'developer'
 
 interface DeliveryInfrastructureManagerProps {
-  isOpen: boolean
-  onClose: () => void
+  isOpen?: boolean
+  onClose?: () => void
   onUpdated?: () => void
+  displayMode?: 'modal' | 'page'
 }
 
 interface SmtpFormState {
@@ -59,10 +60,13 @@ const protocolOptions = [
 ]
 
 const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps> = ({
-  isOpen,
+  isOpen = false,
   onClose,
-  onUpdated
+  onUpdated,
+  displayMode = 'modal'
 }) => {
+  const isPageMode = displayMode === 'page'
+  const isActive = isPageMode ? true : isOpen
   const [activeView, setActiveView] = useState<GuidedView>('guided')
   const [loadingInfrastructure, setLoadingInfrastructure] = useState(false)
   const [infrastructureError, setInfrastructureError] = useState<string | null>(null)
@@ -84,17 +88,17 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
   const [developerProcessing, setDeveloperProcessing] = useState(false)
 
   useEffect(() => {
-    if (isOpen) {
+    if (isActive) {
       setActiveView('guided')
       setSmtpForm(SMTP_DEFAULT)
       setProxyForm(PROXY_DEFAULT)
       loadInfrastructure()
-    } else {
+    } else if (!isPageMode) {
       setDeveloperData('')
       setDeveloperStatus(null)
       setDeveloperSummary(null)
     }
-  }, [isOpen])
+  }, [isActive, isPageMode])
 
   const loadInfrastructure = async () => {
     setLoadingInfrastructure(true)
@@ -766,15 +770,16 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
     </div>
   )
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Manage Delivery Infrastructure"
-      size="xl"
-    >
-      <div className="border-b border-gray-200">
-        <nav className="flex space-x-1 px-6 pt-4">
+  const handleRefreshClick = () => {
+    if (!loadingInfrastructure) {
+      void loadInfrastructure()
+    }
+  }
+
+  const tabList = (
+    <div className="border-b border-gray-200">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-6 pt-4">
+        <nav className="flex space-x-1">
           {[
             { key: 'guided', label: 'Guided view' },
             { key: 'developer', label: 'Developer view' }
@@ -793,16 +798,48 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
             </button>
           ))}
         </nav>
-      </div>
 
-      <div className="max-h-[75vh] overflow-y-auto">
-        {activeView === 'guided' ? renderGuidedView() : renderDeveloperView()}
+        <button
+          type="button"
+          onClick={handleRefreshClick}
+          disabled={loadingInfrastructure}
+          className="rounded-md border border-gray-200 px-3 py-1.5 text-sm text-gray-600 transition hover:border-gray-300 hover:text-gray-900 disabled:cursor-not-allowed disabled:border-gray-100 disabled:text-gray-400"
+        >
+          {loadingInfrastructure ? 'Refreshing…' : 'Refresh data'}
+        </button>
       </div>
+    </div>
+  )
+
+  const content = (
+    <div className={isPageMode ? 'overflow-visible' : 'max-h-[75vh] overflow-y-auto'}>
+      {activeView === 'guided' ? renderGuidedView() : renderDeveloperView()}
+    </div>
+  )
+
+  if (isPageMode) {
+    return (
+      <section className="rounded-lg border border-gray-200 bg-white shadow-sm">
+        {tabList}
+        {content}
+      </section>
+    )
+  }
+
+  return (
+    <Modal
+      isOpen={Boolean(isOpen)}
+      onClose={onClose ?? (() => {})}
+      title="Manage Delivery Infrastructure"
+      size="xl"
+    >
+      {tabList}
+      {content}
 
       <div className="flex items-center justify-end gap-2 border-t border-gray-200 px-6 py-4">
         <button
           type="button"
-          onClick={onClose}
+          onClick={() => onClose?.()}
           className="rounded-md border border-gray-200 px-4 py-2 text-sm text-gray-700 hover:border-gray-300"
         >
           Close

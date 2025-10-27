@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { describe, it, beforeEach, afterEach, expect, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { CampaignForm } from '../CampaignForm'
 import { smsService } from '../../../services'
 
@@ -37,6 +38,10 @@ beforeEach(() => {
     success: true,
     data: { proxies: [{ id: 11, host: 'proxy.local', port: 8000, protocol: 'http', success_rate: 95 }] }
   })
+  vi.spyOn(smsService, 'processMessageTemplate').mockResolvedValue({
+    success: true,
+    data: { processed: 'Hello world' }
+  })
 })
 
 afterEach(() => {
@@ -48,16 +53,18 @@ describe('CampaignForm manual delivery configuration', () => {
     const handleSubmit = vi.fn()
 
     render(
-      <CampaignForm
-        onSubmit={handleSubmit}
-        onCancel={() => {}}
-      />
+      <MemoryRouter>
+        <CampaignForm
+          onSubmit={handleSubmit}
+          onCancel={() => {}}
+        />
+      </MemoryRouter>
     )
 
     await waitFor(() => expect(screen.getByText(/Campaign Information/i)).toBeInTheDocument())
 
-    fireEvent.change(screen.getByLabelText(/Campaign Name/i), { target: { value: 'Test Campaign' } })
-    fireEvent.change(screen.getByLabelText(/Message Template/i), { target: { value: 'Hello world' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter campaign name/i), { target: { value: 'Test Campaign' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter your SMS message/i), { target: { value: 'Hello world' } })
 
     fireEvent.click(screen.getByRole('button', { name: /Create Campaign/i }))
 
@@ -72,16 +79,18 @@ describe('CampaignForm manual delivery configuration', () => {
     const handleSubmit = vi.fn()
 
     render(
-      <CampaignForm
-        onSubmit={handleSubmit}
-        onCancel={() => {}}
-      />
+      <MemoryRouter>
+        <CampaignForm
+          onSubmit={handleSubmit}
+          onCancel={() => {}}
+        />
+      </MemoryRouter>
     )
 
     await waitFor(() => expect(screen.getByLabelText(/smtp.local:25/i)).toBeInTheDocument())
 
-    fireEvent.change(screen.getByLabelText(/Campaign Name/i), { target: { value: 'Test Campaign' } })
-    fireEvent.change(screen.getByLabelText(/Message Template/i), { target: { value: 'Hello world' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter campaign name/i), { target: { value: 'Test Campaign' } })
+    fireEvent.change(screen.getByPlaceholderText(/Enter your SMS message/i), { target: { value: 'Hello world' } })
 
     fireEvent.click(screen.getByLabelText(/smtp.local:25/i))
     fireEvent.click(screen.getByLabelText(/proxy.local:8000/i))

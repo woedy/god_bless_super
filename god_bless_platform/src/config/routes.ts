@@ -61,6 +61,7 @@ export const ROUTES = {
   
   // Settings
   SETTINGS: '/settings',
+  SMS_DELIVERY_SETTINGS: '/settings/sms/delivery',
   PROFILE: '/profile',
 } as const
 
@@ -77,6 +78,7 @@ export const ROUTE_METADATA: Record<string, { label: string }> = {
   [ROUTES.SMS_BULK]: { label: 'Send Bulk SMS' },
   [ROUTES.SMS_OPTIMIZATION]: { label: 'SMS Optimization' },
   [ROUTES.SMS_TEMPLATES]: { label: 'Campaign Templates' },
+  [ROUTES.SMS_DELIVERY_SETTINGS]: { label: 'SMS Delivery Infrastructure' },
   [ROUTES.TASKS]: { label: 'Tasks' },
   'generate': { label: 'Generate' },
   'validate': { label: 'Validate' },

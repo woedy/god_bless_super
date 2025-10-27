@@ -1,6 +1,7 @@
 import React from 'react'
 import { render, waitFor } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 import { BulkSMSPage } from '../BulkSMSPage'
 import { smsService } from '../../../services'
 
@@ -40,6 +41,10 @@ vi.mock('../../../components/sms', () => {
   }
 })
 
+vi.mock('../../../components/layout', () => ({
+  AppLayout: ({ children }: { children: React.ReactNode }) => <div data-testid="app-layout">{children}</div>
+}))
+
 vi.mock('../../../contexts', () => ({
   useProject: () => ({
     currentProjectId: '',
@@ -77,7 +82,11 @@ describe('BulkSMSPage save behaviour', () => {
   it('persists delivery settings through update service', async () => {
     const updateSpy = vi.spyOn(smsService, 'updateCampaignDeliverySettings')
 
-    render(<BulkSMSPage />)
+    render(
+      <MemoryRouter>
+        <BulkSMSPage />
+      </MemoryRouter>
+    )
 
     await waitFor(() => expect(updateSpy).toHaveBeenCalled())
 

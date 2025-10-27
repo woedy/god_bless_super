@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useId, useMemo, useState } from 'react'
 import { smsService } from '../../services'
 import type { CampaignDeliverySettings } from '../../types/rotation'
 
@@ -78,6 +78,7 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
   const [proxyServers, setProxyServers] = useState<ProxyOption[]>([])
   const [loading, setLoading] = useState({ smtp: false, proxies: false })
   const [loadError, setLoadError] = useState<string | null>(null)
+  const templateSelectId = useId()
 
   useEffect(() => {
     let cancelled = false
@@ -444,8 +445,11 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700">Apply Template</label>
+            <label className="mb-2 block text-sm font-medium text-gray-700" htmlFor={templateSelectId}>
+              Apply Template
+            </label>
             <select
+              id={templateSelectId}
               value={value.applied_template_id ?? ''}
               onChange={(event) => handleFieldChange('applied_template_id', event.target.value || undefined)}
               className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
