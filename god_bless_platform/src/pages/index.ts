@@ -23,3 +23,6 @@ export * from './sms'
 
 // Task Pages
 export * from './tasks'
+
+// Settings Pages
+export * from './settings'

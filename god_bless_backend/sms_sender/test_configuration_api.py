@@ -129,19 +129,22 @@ class ConfigurationAPITestCase(TestCase):
     def test_campaign_delivery_settings_update(self):
         """Test updating campaign delivery settings"""
         url = '/api/sms-sender/api/campaign-delivery-settings/update_by_campaign/'
-        
+
         update_data = {
             'campaign_id': self.campaign.id,
             'use_proxy_rotation': False,
             'proxy_rotation_strategy': 'random',
             'custom_delay_enabled': True,
             'custom_delay_min': 3,
-            'custom_delay_max': 8
+            'custom_delay_max': 8,
+            'selected_proxy_ids': [self.proxy_server.id],
+            'selected_smtp_account_ids': [self.smtp_server.id],
+            'applied_template_id': 'flash_sale'
         }
-        
+
         response = self.client.post(url, update_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # Verify settings were updated
         settings = CampaignDeliverySettings.objects.get(campaign=self.campaign)
         self.assertFalse(settings.use_proxy_rotation)
@@ -149,11 +152,32 @@ class ConfigurationAPITestCase(TestCase):
         self.assertTrue(settings.custom_delay_enabled)
         self.assertEqual(settings.custom_delay_min, 3)
         self.assertEqual(settings.custom_delay_max, 8)
+        self.assertEqual(settings.selected_proxy_ids, [self.proxy_server.id])
+        self.assertEqual(settings.selected_smtp_account_ids, [self.smtp_server.id])
+        self.assertEqual(settings.applied_template_id, 'flash_sale')
+
+    def test_campaign_delivery_settings_validation_errors(self):
+        """Invalid delay windows or selections should return errors"""
+        url = '/api/sms-sender/api/campaign-delivery-settings/update_by_campaign/'
+
+        invalid_payload = {
+            'campaign_id': self.campaign.id,
+            'custom_delay_enabled': True,
+            'custom_delay_min': 10,
+            'custom_delay_max': 5,
+            'selected_proxy_ids': ['not-an-int']
+        }
+
+        response = self.client.post(url, invalid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        data = response.json()
+        self.assertTrue('custom_delay' in str(data).lower() or 'minimum delay' in str(data).lower())
+        self.assertIn('selected_proxy_ids', data)
     
     def test_server_health_list(self):
         """Test getting server health information"""
         url = '/api/sms-sender/api/server-health/'
-        
+
         response = self.client.get(url)
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         
@@ -173,6 +197,65 @@ class ConfigurationAPITestCase(TestCase):
         self.assertEqual(smtp_data['port'], '587')
         self.assertTrue(smtp_data['is_healthy'])
         self.assertTrue(smtp_data['is_active'])
+
+    def test_smtp_manager_crud_scoped_to_authenticated_user(self):
+        """Authenticated users can manage their SMTP infrastructure without providing a user field."""
+        list_url = reverse('smtp_api:smtp-api-list')
+
+        create_payload = {
+            'host': 'newsmtp.example.com',
+            'port': '2525',
+            'username': 'relay@example.com',
+            'password': 'super-secret',
+            'ssl': True,
+            'tls': False,
+            'active': True
+        }
+
+        response = self.client.post(list_url, create_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        created_data = response.json()
+        self.assertEqual(created_data['host'], 'newsmtp.example.com')
+        self.assertEqual(created_data['port'], '2525')
+        self.assertTrue(created_data['ssl'])
+        self.assertIn('id', created_data)
+        self.assertEqual(created_data['user'], self.user.id)
+
+        self.assertTrue(
+            SmtpManager.objects.filter(user=self.user, host='newsmtp.example.com', port='2525').exists()
+        )
+
+        other_user = User.objects.create_user(
+            username='other',
+            email='other@example.com',
+            password='otherpass123'
+        )
+        SmtpManager.objects.create(
+            user=other_user,
+            host='outsider.example.com',
+            port='2526',
+            username='outsider',
+            password='password',
+            ssl=False,
+            tls=False,
+            active=True
+        )
+
+        list_response = self.client.get(list_url)
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        listed_hosts = {entry['host'] for entry in list_response.json()}
+        self.assertIn('smtp.example.com', listed_hosts)
+        self.assertIn('newsmtp.example.com', listed_hosts)
+        self.assertNotIn('outsider.example.com', listed_hosts)
+
+        smtp_id = created_data['id']
+        detail_url = reverse('smtp_api:smtp-api-detail', args=[smtp_id])
+
+        delete_response = self.client.delete(detail_url)
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(
+            SmtpManager.objects.filter(id=smtp_id, user=self.user).exists()
+        )
     
     def test_server_health_summary(self):
         """Test getting server health summary"""

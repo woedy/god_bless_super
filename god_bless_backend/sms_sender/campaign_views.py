@@ -11,13 +11,14 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Q, Count, Sum
 
-from .models import SMSCampaign, SMSMessage
+from .models import SMSCampaign, SMSMessage, CampaignDeliverySettings
 from .serializers import (
     SMSCampaignSerializer,
     SMSCampaignCreateSerializer,
     SMSMessageSerializer,
     CampaignStatsSerializer
 )
+from sms_sender.api.serializers import CampaignDeliverySettingsSerializer
 from .tasks import process_sms_campaign_task, schedule_campaign_task
 from .macro_processor import macro_processor, extract_macros, validate_template
 from .campaign_templates import (
@@ -58,14 +59,25 @@ def campaign_list_create(request):
         return Response(serializer.data)
     
     elif request.method == 'POST':
+        delivery_settings_payload = request.data.get('delivery_settings')
         serializer = SMSCampaignCreateSerializer(data=request.data)
         if serializer.is_valid():
             campaign = serializer.save(user=request.user)
-            
+
+            if delivery_settings_payload:
+                settings_serializer = CampaignDeliverySettingsSerializer(
+                    data={**delivery_settings_payload, 'campaign': campaign.id}
+                )
+                if settings_serializer.is_valid():
+                    settings_serializer.save()
+                else:
+                    campaign.delete()
+                    return Response({'delivery_settings': settings_serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
             # If scheduled, schedule the task
             if campaign.scheduled_time and campaign.scheduled_time > timezone.now():
                 schedule_campaign_task.delay(campaign.id)
-            
+
             return Response(
                 SMSCampaignSerializer(campaign).data,
                 status=status.HTTP_201_CREATED
@@ -95,9 +107,23 @@ def campaign_detail(request, campaign_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        delivery_settings_payload = request.data.get('delivery_settings')
         serializer = SMSCampaignCreateSerializer(campaign, data=request.data, partial=True)
         if serializer.is_valid():
             campaign = serializer.save()
+
+            if delivery_settings_payload is not None:
+                settings, _ = CampaignDeliverySettings.objects.get_or_create(campaign=campaign)
+                settings_serializer = CampaignDeliverySettingsSerializer(
+                    settings,
+                    data={**delivery_settings_payload, 'campaign': campaign.id},
+                    partial=True
+                )
+                if settings_serializer.is_valid():
+                    settings_serializer.save()
+                else:
+                    return Response({'delivery_settings': settings_serializer.errors}, status=status.HTTP_400_BAD_REQUEST)
+
             return Response(SMSCampaignSerializer(campaign).data)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
