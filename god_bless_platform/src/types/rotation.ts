@@ -49,29 +49,30 @@ export interface CampaignTemplate {
 export interface CampaignDeliverySettings {
   id?: string
   campaign_id?: string
-  
+
   // Proxy settings
   use_proxy_rotation: boolean
   proxy_rotation_strategy: RotationStrategy
-  
-  // SMTP settings  
+
+  // SMTP settings
   use_smtp_rotation: boolean
   smtp_rotation_strategy: RotationStrategy
-  
+
   // Delivery timing
   custom_delay_enabled: boolean
   custom_delay_min: number
   custom_delay_max: number
   custom_random_seed?: number
-  
+
+  // Manual selections
+  selected_smtp_account_ids: number[]
+  selected_proxy_ids: number[]
+  applied_template_id?: string
+
   // Smart optimization
-  smart_optimization_enabled: boolean
+  adaptive_optimization_enabled: boolean
   carrier_optimization_enabled: boolean
-  time_zone_optimization_enabled: boolean
-  adaptive_rate_limiting_enabled: boolean
-  
-  // Template
-  template_id?: string
+  timezone_optimization_enabled: boolean
 }
 
 export interface ServerUsageStats {

@@ -129,19 +129,22 @@ class ConfigurationAPITestCase(TestCase):
     def test_campaign_delivery_settings_update(self):
         """Test updating campaign delivery settings"""
         url = '/api/sms-sender/api/campaign-delivery-settings/update_by_campaign/'
-        
+
         update_data = {
             'campaign_id': self.campaign.id,
             'use_proxy_rotation': False,
             'proxy_rotation_strategy': 'random',
             'custom_delay_enabled': True,
             'custom_delay_min': 3,
-            'custom_delay_max': 8
+            'custom_delay_max': 8,
+            'selected_proxy_ids': [self.proxy_server.id],
+            'selected_smtp_account_ids': [self.smtp_server.id],
+            'applied_template_id': 'flash_sale'
         }
-        
+
         response = self.client.post(url, update_data, format='json')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        
+
         # Verify settings were updated
         settings = CampaignDeliverySettings.objects.get(campaign=self.campaign)
         self.assertFalse(settings.use_proxy_rotation)
@@ -149,6 +152,27 @@ class ConfigurationAPITestCase(TestCase):
         self.assertTrue(settings.custom_delay_enabled)
         self.assertEqual(settings.custom_delay_min, 3)
         self.assertEqual(settings.custom_delay_max, 8)
+        self.assertEqual(settings.selected_proxy_ids, [self.proxy_server.id])
+        self.assertEqual(settings.selected_smtp_account_ids, [self.smtp_server.id])
+        self.assertEqual(settings.applied_template_id, 'flash_sale')
+
+    def test_campaign_delivery_settings_validation_errors(self):
+        """Invalid delay windows or selections should return errors"""
+        url = '/api/sms-sender/api/campaign-delivery-settings/update_by_campaign/'
+
+        invalid_payload = {
+            'campaign_id': self.campaign.id,
+            'custom_delay_enabled': True,
+            'custom_delay_min': 10,
+            'custom_delay_max': 5,
+            'selected_proxy_ids': ['not-an-int']
+        }
+
+        response = self.client.post(url, invalid_payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        data = response.json()
+        self.assertTrue('custom_delay' in str(data).lower() or 'minimum delay' in str(data).lower())
+        self.assertIn('selected_proxy_ids', data)
     
     def test_server_health_list(self):
         """Test getting server health information"""

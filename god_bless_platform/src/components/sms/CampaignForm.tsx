@@ -5,8 +5,13 @@
 
 import React, { useState, useEffect } from 'react'
 import { MessageComposer } from './MessageComposer'
+import { DeliverySettingsForm } from './DeliverySettingsForm'
+import { DeliveryInfrastructureManager } from './DeliveryInfrastructureManager'
+import type { DeliverySettingsFormValue } from './DeliverySettingsForm'
+import OneClickOptimization from './OneClickOptimization'
 import { smsService } from '../../services'
 import type { CreateCampaignData, Campaign } from '../../types'
+import { useNavigate } from 'react-router-dom'
 
 interface CampaignFormProps {
   campaign?: Campaign
@@ -23,6 +28,7 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
   onCancel,
   isLoading = false
 }) => {
+  const navigate = useNavigate()
   const [formData, setFormData] = useState<CreateCampaignData>({
     name: '',
     description: '',
@@ -43,11 +49,30 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
   const [macros, setMacros] = useState<Record<string, any>>({})
   const [templates, setTemplates] = useState<any[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [deliveryErrors, setDeliveryErrors] = useState<Partial<Record<keyof DeliverySettingsFormValue | 'custom_delay_range', string>>>({})
+  const [isInfrastructureManagerOpen, setInfrastructureManagerOpen] = useState(false)
+  const [infrastructureRefreshKey, setInfrastructureRefreshKey] = useState(0)
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsFormValue>({
+    use_proxy_rotation: true,
+    proxy_rotation_strategy: 'round_robin',
+    use_smtp_rotation: true,
+    smtp_rotation_strategy: 'round_robin',
+    custom_delay_enabled: false,
+    custom_delay_min: 1,
+    custom_delay_max: 5,
+    custom_random_seed: undefined,
+    selected_proxy_ids: [],
+    selected_smtp_account_ids: [],
+    applied_template_id: undefined,
+    adaptive_optimization_enabled: false,
+    carrier_optimization_enabled: false,
+    timezone_optimization_enabled: false
+  })
 
   // Load initial data
   useEffect(() => {
     loadMacrosAndTemplates()
-    
+
     if (campaign) {
       setFormData({
         name: campaign.name,
@@ -65,6 +90,17 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
         use_smtp_rotation: true,
         projectId: campaign.projectId || projectId || ''
       })
+
+      if (campaign.deliverySettings) {
+        setDeliverySettings(prev => ({
+          ...prev,
+          ...campaign.deliverySettings,
+          selected_proxy_ids: campaign.deliverySettings.selected_proxy_ids ?? [],
+          selected_smtp_account_ids: campaign.deliverySettings.selected_smtp_account_ids ?? []
+        }))
+      } else {
+        hydrateDeliverySettings(campaign.id)
+      }
     }
   }, [campaign, projectId])
 
@@ -87,6 +123,23 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
     }
   }
 
+  const hydrateDeliverySettings = async (campaignId: number | string) => {
+    try {
+      const response = await smsService.getCampaignDeliverySettings(campaignId)
+      if (response.success) {
+        const data = response.data
+        setDeliverySettings(prev => ({
+          ...prev,
+          ...data,
+          selected_proxy_ids: data.selected_proxy_ids ?? [],
+          selected_smtp_account_ids: data.selected_smtp_account_ids ?? []
+        }))
+      }
+    } catch (error) {
+      console.warn('Unable to hydrate delivery settings for campaign form', error)
+    }
+  }
+
   const handleChange = (field: keyof CreateCampaignData, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -100,6 +153,29 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
         [field]: ''
       }))
     }
+  }
+
+  const validateDeliverySettings = (): boolean => {
+    const newErrors: Partial<Record<keyof DeliverySettingsFormValue | 'custom_delay_range', string>> = {}
+
+    if (deliverySettings.use_smtp_rotation && deliverySettings.selected_smtp_account_ids.length === 0) {
+      newErrors.selected_smtp_account_ids = 'Select at least one SMTP account or disable rotation.'
+    }
+
+    if (deliverySettings.use_proxy_rotation && deliverySettings.selected_proxy_ids.length === 0) {
+      newErrors.selected_proxy_ids = 'Select at least one proxy or disable rotation.'
+    }
+
+    if (deliverySettings.custom_delay_enabled) {
+      if (deliverySettings.custom_delay_min < 0 || deliverySettings.custom_delay_max < 0) {
+        newErrors.custom_delay_range = 'Delay values must be zero or greater.'
+      } else if (deliverySettings.custom_delay_min > deliverySettings.custom_delay_max) {
+        newErrors.custom_delay_range = 'Minimum delay must be less than or equal to maximum delay.'
+      }
+    }
+
+    setDeliveryErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
   const validateForm = (): boolean => {
@@ -126,14 +202,18 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
     }
 
     setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    const deliveryValid = validateDeliverySettings()
+    return Object.keys(newErrors).length === 0 && deliveryValid
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     if (validateForm()) {
-      onSubmit(formData)
+      onSubmit({
+        ...formData,
+        delivery_settings: deliverySettings
+      })
     }
   }
 
@@ -192,12 +272,35 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
           templates={templates}
           onMessageChange={(message) => handleChange('message_template', message)}
           onMacrosChange={(macros) => handleChange('custom_macros', macros)}
+          onTemplateSelect={(template) => {
+            handleChange('message_template', template.message_template)
+            setDeliverySettings(prev => ({
+              ...prev,
+              applied_template_id: template ? template.template_id ?? template.id : prev.applied_template_id
+            }))
+          }}
         />
-        
+
         {errors.message_template && (
           <p className="mt-1 text-sm text-red-600">{errors.message_template}</p>
         )}
       </div>
+
+      {/* Delivery Settings */}
+      <DeliverySettingsForm
+        value={deliverySettings}
+        onChange={setDeliverySettings}
+        errors={deliveryErrors}
+        templates={templates}
+        disabled={isLoading}
+        onTemplateInspect={(template) => {
+          if (template.message_template) {
+            handleChange('message_template', template.message_template)
+          }
+        }}
+        onManageInfrastructure={() => setInfrastructureManagerOpen(true)}
+        refreshKey={infrastructureRefreshKey}
+      />
 
       {/* Campaign Settings */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -274,6 +377,48 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
         </div>
       </div>
 
+      {/* Automation Controls */}
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h3 className="text-lg font-medium text-gray-900">Automation Shortcuts</h3>
+            <p className="text-sm text-gray-500">
+              Keep manual settings aligned with One-Click optimisation and the Quick Optimize workflow.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => campaign?.id && navigate(`/sms/optimization?campaignId=${campaign.id}&mode=quick`) }
+            className="inline-flex items-center rounded-md border border-blue-500 px-3 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!campaign?.id}
+          >
+            Quick Optimize Dashboard
+          </button>
+        </div>
+
+        <div className="mt-4">
+          <OneClickOptimization
+            campaignId={campaign?.id ? Number(campaign.id) : undefined}
+            onOptimizationComplete={(result) => {
+              if (!result?.config) return
+              const { config } = result
+              setDeliverySettings(prev => ({
+                ...prev,
+                use_proxy_rotation: config.proxy_rotation_enabled ?? prev.use_proxy_rotation,
+                proxy_rotation_strategy: (config.proxy_rotation_strategy as DeliverySettingsFormValue['proxy_rotation_strategy']) ?? prev.proxy_rotation_strategy,
+                use_smtp_rotation: config.smtp_rotation_enabled ?? prev.use_smtp_rotation,
+                smtp_rotation_strategy: (config.smtp_rotation_strategy as DeliverySettingsFormValue['smtp_rotation_strategy']) ?? prev.smtp_rotation_strategy,
+                custom_delay_enabled: config.delivery_delay_enabled ?? prev.custom_delay_enabled,
+                custom_delay_min: config.delivery_delay_min ?? prev.custom_delay_min,
+                custom_delay_max: config.delivery_delay_max ?? prev.custom_delay_max,
+                adaptive_optimization_enabled: config.adaptive_optimization_enabled ?? prev.adaptive_optimization_enabled
+              }))
+            }}
+            showAnalysis={false}
+          />
+        </div>
+      </div>
+
       {/* Scheduling */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <h3 className="text-lg font-medium text-gray-900 mb-4">
@@ -333,6 +478,12 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
           {isLoading ? 'Saving...' : campaign ? 'Update Campaign' : 'Create Campaign'}
         </button>
       </div>
+
+      <DeliveryInfrastructureManager
+        isOpen={isInfrastructureManagerOpen}
+        onClose={() => setInfrastructureManagerOpen(false)}
+        onUpdated={() => setInfrastructureRefreshKey((prev) => prev + 1)}
+      />
     </form>
   )
 }

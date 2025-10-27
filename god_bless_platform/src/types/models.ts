@@ -3,6 +3,8 @@
  * TypeScript interfaces for all data models used in the application
  */
 
+import type { CampaignDeliverySettings } from './rotation'
+
 // Base types
 export type ID = string
 export type Timestamp = string
@@ -315,6 +317,7 @@ export interface Campaign {
   projectId: ID
   createdBy: ID
   settings: CampaignSettings
+  deliverySettings?: CampaignDeliverySettings
   
   // Results
   deliveryReport?: CampaignDeliveryReport

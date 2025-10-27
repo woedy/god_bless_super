@@ -7,7 +7,9 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { BulkSMSForm } from '../../components/sms'
+import type { DeliverySettingsFormValue } from '../../components/sms/DeliverySettingsForm'
 import { smsService } from '../../services'
+import type { CreateCampaignData } from '../../types'
 import { useProject } from '../../contexts'
 import type { BreadcrumbItem } from '../../types'
 
@@ -58,37 +60,68 @@ export function BulkSMSPage() {
     sender_name: string
     subject: string
     provider: string
+    delivery_settings: DeliverySettingsFormValue
+    applied_template_id?: string
   }) => {
     setIsLoading(true)
     setError(null)
     setSuccess(null)
 
     try {
-      // Get current user ID (this would typically come from auth context)
-      const userId = 'current-user-id' // TODO: Get from auth context
+      const campaignName = data.subject?.trim()
+        ? data.subject.trim()
+        : `Manual bulk send ${new Date().toLocaleString()}`
 
-      const response = await smsService.sendBulkSMS({
-        user_id: userId,
-        v_phone_numbers: data.recipients,
-        sender_name: data.sender_name,
-        subject: data.subject,
-        message: data.message,
-        provider: data.provider
+      const campaignPayload = {
+        name: campaignName,
+        description: `Manual bulk SMS launched by ${data.sender_name || 'unknown sender'}.`,
+        message_template: data.message,
+        custom_macros: {},
+        target_carrier: '',
+        target_type: '',
+        target_area_codes: [],
+        scheduled_time: '',
+        send_immediately: true,
+        batch_size: 100,
+        rate_limit: 10,
+        use_proxy_rotation: data.delivery_settings.use_proxy_rotation,
+        use_smtp_rotation: data.delivery_settings.use_smtp_rotation,
+        projectId: currentProjectId || '',
+        delivery_settings: {
+          ...data.delivery_settings,
+          applied_template_id: data.applied_template_id ?? data.delivery_settings.applied_template_id
+        }
+      } satisfies CreateCampaignData
+
+      const campaignResponse = await smsService.createCampaign(campaignPayload)
+      if (!campaignResponse.success) {
+        throw new Error('Failed to create campaign record')
+      }
+
+      const campaign = campaignResponse.data
+
+      await smsService.updateCampaignDeliverySettings(campaign.id, {
+        ...data.delivery_settings,
+        applied_template_id: data.applied_template_id ?? data.delivery_settings.applied_template_id
       })
 
-      if (response.success) {
-        setSuccess(`SMS successfully sent to ${data.recipients.length} recipients`)
-        
-        // Redirect after a delay
-        setTimeout(() => {
-          navigate('/sms')
-        }, 2000)
-      } else {
-        throw new Error('Failed to send bulk SMS')
+      if (data.recipients.length > 0) {
+        await smsService.addCampaignRecipients(
+          campaign.id,
+          data.recipients.map((phone) => ({ phone_number: phone }))
+        )
       }
+
+      await smsService.startCampaign(campaign.id)
+
+      setSuccess(`Campaign "${campaign.name}" launched for ${data.recipients.length} recipients.`)
+
+      setTimeout(() => {
+        navigate('/sms')
+      }, 2000)
     } catch (error) {
-      console.error('Failed to send bulk SMS:', error)
-      setError(error instanceof Error ? error.message : 'Failed to send bulk SMS')
+      console.error('Failed to launch manual campaign:', error)
+      setError(error instanceof Error ? error.message : 'Failed to launch manual campaign')
     } finally {
       setIsLoading(false)
     }

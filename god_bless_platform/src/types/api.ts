@@ -3,16 +3,17 @@
  * TypeScript interfaces for API requests, responses, and related types
  */
 
-import type { 
-  User, 
-  Project, 
-  Task, 
-  Campaign, 
+import type {
+  User,
+  Project,
+  Task,
+  Campaign,
   TaskType,
   ProjectStatus,
   ProjectPriority,
   CampaignStatus
 } from './models'
+import type { CampaignDeliverySettings } from './rotation'
 
 // Base API Types
 export interface ApiResponse<T = any> {
@@ -221,6 +222,7 @@ export interface CreateCampaignData {
   settings?: Partial<Campaign['settings']>
   scheduleDelivery?: boolean
   deliveryTime?: string
+  delivery_settings?: Partial<CampaignDeliverySettings>
 }
 
 export interface CampaignRecipients {

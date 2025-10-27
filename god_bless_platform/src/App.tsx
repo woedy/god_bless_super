@@ -46,6 +46,7 @@ import {
   BulkSMSPage,
   OptimizationPage,
   TemplatesPage,
+  SmsDeliverySettingsPage,
   TasksPage,
   TaskHistoryPage,
   ActiveTasksPage,
@@ -259,6 +260,15 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <TemplatesPage />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      <Route
+                        path={ROUTES.SMS_DELIVERY_SETTINGS}
+                        element={
+                          <ProtectedRoute>
+                            <SmsDeliverySettingsPage />
                           </ProtectedRoute>
                         }
                       />
