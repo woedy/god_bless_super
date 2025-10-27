@@ -194,12 +194,108 @@ export class SMSService {
   }
 
   /**
+   * Create a new SMTP account through the manager API
+   */
+  async createSmtpAccount(account: {
+    host?: string
+    port?: string | number
+    username?: string
+    password?: string
+    ssl?: boolean
+    tls?: boolean
+    active?: boolean
+  }): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('/smtp-manager/api/', account)
+  }
+
+  /**
+   * Update an existing SMTP account
+   */
+  async updateSmtpAccount(
+    accountId: number | string,
+    updates: Partial<{
+      host: string
+      port: string | number
+      username: string
+      password: string
+      ssl: boolean
+      tls: boolean
+      active: boolean
+    }>
+  ): Promise<ApiResponse<any>> {
+    return apiClient.patch<any>(`/smtp-manager/api/${accountId}/`, updates)
+  }
+
+  /**
    * Get proxy servers available to the authenticated user
    */
   async getProxyServers(): Promise<ApiResponse<{ proxies: any[] }>> {
     const user = await authService.getCurrentUser()
     const userId = user.userId || user.id
     return apiClient.get<{ proxies: any[] }>('/proxy-server/list/', { user_id: userId })
+  }
+
+  /**
+   * Add a new proxy server configuration
+   */
+  async createProxyServer(proxy: {
+    host: string
+    port: string | number
+    username?: string
+    password?: string
+    protocol?: string
+    is_active?: boolean
+  }): Promise<ApiResponse<any>> {
+    const user = await authService.getCurrentUser()
+    const userId = user.userId || user.id
+    return apiClient.post<any>('/proxy-server/add/', {
+      user_id: userId,
+      ...proxy
+    })
+  }
+
+  /**
+   * Update an existing proxy server configuration
+   */
+  async updateProxyServer(
+    proxyId: number | string,
+    updates: Partial<{
+      host: string
+      port: string | number
+      username: string
+      password: string
+      protocol: string
+      is_active: boolean
+    }>
+  ): Promise<ApiResponse<any>> {
+    const user = await authService.getCurrentUser()
+    const userId = user.userId || user.id
+    return apiClient.post<any>('/proxy-server/update/', {
+      user_id: userId,
+      id: proxyId,
+      ...updates
+    })
+  }
+
+  /**
+   * Export the user's delivery infrastructure configuration
+   */
+  async exportBulkConfiguration(format: 'json' | 'csv' = 'json'): Promise<ApiResponse<string>> {
+    return apiClient.get<string>('/sms-sender/api/bulk-configuration/export/', { format })
+  }
+
+  /**
+   * Import delivery infrastructure configuration from JSON payload
+   */
+  async importBulkConfiguration(payload: Record<string, any>): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('/sms-sender/api/bulk-configuration/import_config/', payload)
+  }
+
+  /**
+   * Validate a configuration payload without importing
+   */
+  async validateBulkConfiguration(payload: Record<string, any>): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('/sms-sender/api/bulk-configuration/validate_import/', payload)
   }
 
   /**

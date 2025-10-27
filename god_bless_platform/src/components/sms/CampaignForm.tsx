@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react'
 import { MessageComposer } from './MessageComposer'
 import { DeliverySettingsForm } from './DeliverySettingsForm'
+import { DeliveryInfrastructureManager } from './DeliveryInfrastructureManager'
 import type { DeliverySettingsFormValue } from './DeliverySettingsForm'
 import OneClickOptimization from './OneClickOptimization'
 import { smsService } from '../../services'
@@ -49,6 +50,8 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
   const [templates, setTemplates] = useState<any[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [deliveryErrors, setDeliveryErrors] = useState<Partial<Record<keyof DeliverySettingsFormValue | 'custom_delay_range', string>>>({})
+  const [isInfrastructureManagerOpen, setInfrastructureManagerOpen] = useState(false)
+  const [infrastructureRefreshKey, setInfrastructureRefreshKey] = useState(0)
   const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsFormValue>({
     use_proxy_rotation: true,
     proxy_rotation_strategy: 'round_robin',
@@ -295,6 +298,8 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
             handleChange('message_template', template.message_template)
           }
         }}
+        onManageInfrastructure={() => setInfrastructureManagerOpen(true)}
+        refreshKey={infrastructureRefreshKey}
       />
 
       {/* Campaign Settings */}
@@ -473,6 +478,12 @@ export const CampaignForm: React.FC<CampaignFormProps> = ({
           {isLoading ? 'Saving...' : campaign ? 'Update Campaign' : 'Create Campaign'}
         </button>
       </div>
+
+      <DeliveryInfrastructureManager
+        isOpen={isInfrastructureManagerOpen}
+        onClose={() => setInfrastructureManagerOpen(false)}
+        onUpdated={() => setInfrastructureRefreshKey((prev) => prev + 1)}
+      />
     </form>
   )
 }

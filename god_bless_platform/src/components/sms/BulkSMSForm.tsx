@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react'
 import { MessageComposer } from './MessageComposer'
 import { RecipientSelector } from './RecipientSelector'
 import { DeliverySettingsForm } from './DeliverySettingsForm'
+import { DeliveryInfrastructureManager } from './DeliveryInfrastructureManager'
 import type { DeliverySettingsFormValue } from './DeliverySettingsForm'
 import { smsService } from '../../services'
 
@@ -52,6 +53,8 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
   const [templates, setTemplates] = useState<any[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [deliveryErrors, setDeliveryErrors] = useState<Partial<Record<keyof DeliverySettingsFormValue | 'custom_delay_range', string>>>({})
+  const [isInfrastructureManagerOpen, setInfrastructureManagerOpen] = useState(false)
+  const [infrastructureRefreshKey, setInfrastructureRefreshKey] = useState(0)
 
   const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsFormValue>({
     use_proxy_rotation: true,
@@ -367,6 +370,8 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
         errors={deliveryErrors}
         templates={templates}
         disabled={isLoading}
+        onManageInfrastructure={() => setInfrastructureManagerOpen(true)}
+        refreshKey={infrastructureRefreshKey}
       />
 
       {/* Recipients */}
@@ -418,6 +423,12 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
           {isLoading ? 'Sending...' : `Send to ${recipients.length} Recipients`}
         </button>
       </div>
+
+      <DeliveryInfrastructureManager
+        isOpen={isInfrastructureManagerOpen}
+        onClose={() => setInfrastructureManagerOpen(false)}
+        onUpdated={() => setInfrastructureRefreshKey((prev) => prev + 1)}
+      />
     </form>
   )
 }

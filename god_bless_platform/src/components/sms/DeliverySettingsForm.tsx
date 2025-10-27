@@ -35,6 +35,8 @@ interface DeliverySettingsFormProps {
   disabled?: boolean
   templates?: any[]
   onTemplateInspect?: (template: any) => void
+  onManageInfrastructure?: () => void
+  refreshKey?: number
 }
 
 interface ProxyOption {
@@ -68,7 +70,9 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
   errors = {},
   disabled = false,
   templates = [],
-  onTemplateInspect
+  onTemplateInspect,
+  onManageInfrastructure,
+  refreshKey
 }) => {
   const [smtpAccounts, setSmtpAccounts] = useState<SmtpOption[]>([])
   const [proxyServers, setProxyServers] = useState<ProxyOption[]>([])
@@ -120,7 +124,7 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [refreshKey])
 
   const handleFieldChange = <K extends keyof DeliverySettingsFormValue>(field: K, fieldValue: DeliverySettingsFormValue[K]) => {
     onChange({
@@ -160,23 +164,34 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
 
       {/* SMTP Accounts */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h4 className="text-base font-medium text-gray-900">SMTP Accounts</h4>
             <p className="text-sm text-gray-500">
               Choose which SMTP accounts participate in this campaign and fine-tune the rotation cadence.
             </p>
           </div>
-          <label className="flex items-center space-x-2 text-sm text-gray-600">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              checked={value.use_smtp_rotation}
-              onChange={(event) => handleFieldChange('use_smtp_rotation', event.target.checked)}
-              disabled={disabled}
-            />
-            <span>Enable SMTP Rotation</span>
-          </label>
+          <div className="flex items-center gap-3">
+            {onManageInfrastructure && (
+              <button
+                type="button"
+                onClick={onManageInfrastructure}
+                className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:border-gray-300"
+              >
+                Manage accounts
+              </button>
+            )}
+            <label className="flex items-center space-x-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                checked={value.use_smtp_rotation}
+                onChange={(event) => handleFieldChange('use_smtp_rotation', event.target.checked)}
+                disabled={disabled}
+              />
+              <span>Enable SMTP Rotation</span>
+            </label>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -200,7 +215,9 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
             <label className="mb-2 block text-sm font-medium text-gray-700">Accounts in Rotation</label>
             <div className="space-y-2 rounded-md border border-gray-200 p-3 max-h-48 overflow-y-auto">
               {smtpAccounts.length === 0 && (
-                <p className="text-sm text-gray-500">No SMTP accounts available. Add accounts in the SMTP Manager.</p>
+                <p className="text-sm text-gray-500">
+                  No SMTP accounts available. {onManageInfrastructure ? 'Open the manager to create one.' : 'Add accounts in the SMTP Manager.'}
+                </p>
               )}
               {smtpAccounts.map((account) => (
                 <label key={account.id} className="flex items-start space-x-3 text-sm text-gray-700">
@@ -230,23 +247,34 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
 
       {/* Proxy Selection */}
       <div className="rounded-lg border border-gray-200 bg-white p-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-4">
           <div>
             <h4 className="text-base font-medium text-gray-900">Proxy Pools</h4>
             <p className="text-sm text-gray-500">
               Select proxy servers to balance carrier load and minimise throttling events.
             </p>
           </div>
-          <label className="flex items-center space-x-2 text-sm text-gray-600">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-              checked={value.use_proxy_rotation}
-              onChange={(event) => handleFieldChange('use_proxy_rotation', event.target.checked)}
-              disabled={disabled}
-            />
-            <span>Enable Proxy Rotation</span>
-          </label>
+          <div className="flex items-center gap-3">
+            {onManageInfrastructure && (
+              <button
+                type="button"
+                onClick={onManageInfrastructure}
+                className="rounded-md border border-gray-200 px-3 py-1 text-sm text-gray-600 hover:border-gray-300"
+              >
+                Manage proxies
+              </button>
+            )}
+            <label className="flex items-center space-x-2 text-sm text-gray-600">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                checked={value.use_proxy_rotation}
+                onChange={(event) => handleFieldChange('use_proxy_rotation', event.target.checked)}
+                disabled={disabled}
+              />
+              <span>Enable Proxy Rotation</span>
+            </label>
+          </div>
         </div>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -270,7 +298,9 @@ const DeliverySettingsForm: React.FC<DeliverySettingsFormProps> = ({
             <label className="mb-2 block text-sm font-medium text-gray-700">Active Proxies</label>
             <div className="space-y-2 rounded-md border border-gray-200 p-3 max-h-48 overflow-y-auto">
               {proxyServers.length === 0 && (
-                <p className="text-sm text-gray-500">No proxies found. Configure proxies in the Proxy Manager.</p>
+                <p className="text-sm text-gray-500">
+                  No proxies found. {onManageInfrastructure ? 'Open the manager to add a proxy.' : 'Configure proxies in the Proxy Manager.'}
+                </p>
               )}
               {proxyServers.map((proxy) => (
                 <label key={proxy.id} className="flex items-start space-x-3 text-sm text-gray-700">

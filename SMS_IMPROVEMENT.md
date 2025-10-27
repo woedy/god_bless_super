@@ -20,7 +20,7 @@ All new work should extend these building blocks instead of introducing parallel
     - Submitted configurations persist to the campaign record (`/api/sms/campaigns/` endpoints) and hydrate existing campaigns by pre-populating `BulkSMSForm` from the stored `delivery_settings` relationship.
     - Surface automation controls alongside the manual inputs so operators can trigger One-Click/auto optimization or Quick Optimize from the campaign form, and ensure the returned recommendations sync the same `CampaignDeliverySettings` instance.
   - **Automated tests:** Add frontend component tests under `src/services/__tests__/sms` or `src/components/sms/__tests__` asserting form validation, template selection, and that save events call `smsService.updateCampaignDeliverySettings`. Add backend controller tests around `sms_sender.api.views` (or serializers) ensuring payloads are validated against `CampaignDeliverySettings` constraints and saved correctly.
-  - **Manual verification:** From the dashboard, open the bulk sender, configure SMTP/proxy/delay/template settings, save, refresh the page, and confirm the values reload. Attempt invalid inputs to confirm inline validation, and verify persisted settings in the Django admin or via the campaign detail API. Run One-Click/Quick Optimize from the same screen and confirm the auto-applied values update the stored delivery settings instead of creating duplicates.
+  - **Manual verification:** From the dashboard, open the bulk sender, configure SMTP/proxy/delay/template settings, save, refresh the page, and confirm the values reload. Attempt invalid inputs to confirm inline validation, and verify persisted settings in the Django admin or via the campaign detail API. Run One-Click/Quick Optimize from the same screen and confirm the auto-applied values update the stored delivery settings instead of creating duplicates. Launch the Delivery Infrastructure Manager from the “Manage accounts/proxies” buttons, add/edit SMTP or proxy records via the simple forms, then switch to the developer JSON/CSV tab to import/export sample payloads and ensure the list refreshes back in the campaign form without reloading the page.
 
 ## Priority 2 – Campaign execution & scheduling reliability
 - **User story:** As a campaign manager, I want queued SMS jobs to respect shared rate limits, proxy availability, and SMTP rotation so multi-worker deliveries stay consistent and recover from throttling.
@@ -56,3 +56,11 @@ All new work should extend these building blocks instead of introducing parallel
 ---
 
 Complete each story sequentially to maintain a testable, incrementally deployable path toward a polished SMS sender experience.
+
+## Testing quick reference
+
+Use this checklist whenever we finish a task touching the SMS sender UI or delivery configuration stack:
+
+- **Backend APIs** — `python manage.py test sms_sender.test_configuration_api proxy_server.tests` verifies delivery settings persistence, SMTP/proxy CRUD, and import/export validation.
+- **Frontend behaviour** — `npm run test -- --runTestsByPath src/components/sms/__tests__/CampaignForm.test.tsx src/pages/sms/__tests__/BulkSMSPage.test.tsx` ensures the forms surface the infrastructure manager, enforce validation, and call the API helpers. Remember to export `VITE_API_URL` and `VITE_WS_URL` (or supply a `.env.test`) before running the command.
+- **Manual smoke test** — In the dashboard’s Bulk SMS or Campaign flows, open the Delivery Infrastructure Manager, add an SMTP and proxy via the simple forms, confirm the entries appear in the dropdowns, then import a JSON bundle in the developer tab and verify both the manager and the delivery settings form refresh without a full reload. Submit a campaign and confirm the saved delivery settings round-trip after a page refresh.
