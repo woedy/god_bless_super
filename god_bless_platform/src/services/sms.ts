@@ -4,6 +4,7 @@
  */
 
 import { apiClient } from './api'
+import { authService } from './auth'
 import type {
   ApiResponse,
   CreateCampaignData,
@@ -15,6 +16,7 @@ import type {
   FileUploadResponse,
   TaskActionRequest
 } from '../types'
+import type { CampaignDeliverySettings } from '../types/rotation'
 
 // SMS Campaign Service
 export class SMSService {
@@ -44,6 +46,32 @@ export class SMSService {
    */
   async updateCampaign(campaignId: string, updates: Partial<CreateCampaignData>): Promise<ApiResponse<Campaign>> {
     return apiClient.put<Campaign>(`/sms-sender/campaigns/${campaignId}/`, updates)
+  }
+
+  /**
+   * Fetch delivery settings for a campaign
+   */
+  async getCampaignDeliverySettings(campaignId: string | number): Promise<ApiResponse<CampaignDeliverySettings>> {
+    return apiClient.get<CampaignDeliverySettings>(
+      '/sms-sender/api/campaign-delivery-settings/by_campaign/',
+      { campaign_id: String(campaignId) }
+    )
+  }
+
+  /**
+   * Update delivery settings for a campaign
+   */
+  async updateCampaignDeliverySettings(
+    campaignId: string | number,
+    settings: Partial<CampaignDeliverySettings>
+  ): Promise<ApiResponse<CampaignDeliverySettings>> {
+    return apiClient.post<CampaignDeliverySettings>(
+      '/sms-sender/api/campaign-delivery-settings/update_by_campaign/',
+      {
+        campaign_id: String(campaignId),
+        ...settings
+      }
+    )
   }
 
   /**
@@ -156,6 +184,169 @@ export class SMSService {
       smtps: any[]
       providers: string[]
     }>('/sms-sender/get-smtps-providers/', { user_id: userId })
+  }
+
+  /**
+   * Get SMTP accounts for the authenticated user via the manager API
+   */
+  async getSmtpAccounts(): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>('/smtp-manager/api/')
+  }
+
+  /**
+   * Create a new SMTP account through the manager API
+   */
+  async createSmtpAccount(account: {
+    host?: string
+    port?: string | number
+    username?: string
+    password?: string
+    ssl?: boolean
+    tls?: boolean
+    active?: boolean
+  }): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('/smtp-manager/api/', account)
+  }
+
+  /**
+   * Update an existing SMTP account
+   */
+  async updateSmtpAccount(
+    accountId: number | string,
+    updates: Partial<{
+      host: string
+      port: string | number
+      username: string
+      password: string
+      ssl: boolean
+      tls: boolean
+      active: boolean
+    }>
+  ): Promise<ApiResponse<any>> {
+    return apiClient.patch<any>(`/smtp-manager/api/${accountId}/`, updates)
+  }
+
+  /**
+   * Delete an SMTP account owned by the authenticated user
+   */
+  async deleteSmtpAccount(accountId: number | string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/smtp-manager/api/${accountId}/`)
+  }
+
+  /**
+   * Get proxy servers available to the authenticated user
+   */
+  async getProxyServers(): Promise<ApiResponse<any[]>> {
+    return apiClient.get<any[]>('/proxy-server/api/')
+  }
+
+  /**
+   * Add a new proxy server configuration
+   */
+  async createProxyServer(proxy: {
+    host: string
+    port: string | number
+    username?: string
+    password?: string
+    protocol?: string
+    is_active?: boolean
+  }): Promise<ApiResponse<any>> {
+    const payload: Record<string, unknown> = {
+      host: proxy.host,
+      port: Number(proxy.port),
+      protocol: proxy.protocol ?? 'http',
+      is_active: proxy.is_active ?? true
+    }
+
+    if (proxy.username) {
+      payload.username = proxy.username
+    }
+
+    if (proxy.password) {
+      payload.password = proxy.password
+    }
+
+    return apiClient.post<any>('/proxy-server/api/', payload)
+  }
+
+  /**
+   * Update an existing proxy server configuration
+   */
+  async updateProxyServer(
+    proxyId: number | string,
+    updates: Partial<{
+      host: string
+      port: string | number
+      username: string
+      password: string
+      protocol: string
+      is_active: boolean
+    }>
+  ): Promise<ApiResponse<any>> {
+    const payload: Record<string, unknown> = {}
+
+    if (updates.host !== undefined) {
+      payload.host = updates.host
+    }
+    if (updates.port !== undefined) {
+      payload.port = Number(updates.port)
+    }
+    if (updates.username !== undefined) {
+      payload.username = updates.username
+    }
+    if (updates.password !== undefined) {
+      payload.password = updates.password
+    }
+    if (updates.protocol !== undefined) {
+      payload.protocol = updates.protocol
+    }
+    if (updates.is_active !== undefined) {
+      payload.is_active = updates.is_active
+    }
+
+    return apiClient.patch<any>(`/proxy-server/api/${proxyId}/`, payload)
+  }
+
+  /**
+   * Delete a proxy server configuration
+   */
+  async deleteProxyServer(proxyId: number | string): Promise<ApiResponse<void>> {
+    return apiClient.delete<void>(`/proxy-server/api/${proxyId}/`)
+  }
+
+  /**
+   * Retrieve rotation and delivery delay defaults for the authenticated user
+   */
+  async getRotationSettings(): Promise<ApiResponse<any>> {
+    return apiClient.get<any>('/sms-sender/api/rotation-settings/')
+  }
+
+  /**
+   * Update rotation and delivery delay defaults for the authenticated user
+   */
+  async updateRotationSettings(payload: Record<string, unknown>): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('/sms-sender/api/rotation-settings/', payload)
+  }
+
+  /**
+   * Export the user's delivery infrastructure configuration
+   */
+  async exportBulkConfiguration(format: 'json' | 'csv' = 'json'): Promise<ApiResponse<string>> {
+    return apiClient.get<string>('/sms-sender/api/bulk-configuration/export/', { format })
+  }
+
+  /**
+   * Import delivery infrastructure configuration from JSON payload
+   */
+  async importBulkConfiguration(payload: Record<string, any>): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('/sms-sender/api/bulk-configuration/import_config/', payload)
+  }
+
+  /**
+   * Validate a configuration payload without importing
+   */
+  async validateBulkConfiguration(payload: Record<string, any>): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('/sms-sender/api/bulk-configuration/validate_import/', payload)
   }
 
   /**

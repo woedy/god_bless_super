@@ -9,10 +9,13 @@ from sms_sender.api.retry_views import RetryManagementViewSet, RetryAttemptViewS
 from sms_sender.api.template_views import CampaignTemplateViewSet, create_template_from_campaign, get_campaign_template_suggestions, bulk_template_operations
 from sms_sender.api.monitoring_views import CampaignMonitoringViewSet, SystemMonitoringViewSet
 from sms_sender.api.configuration_views import (
-    RotationSettingsViewSet, 
-    CampaignDeliverySettingsViewSet, 
+    RotationSettingsViewSet,
+    CampaignDeliverySettingsViewSet,
     ServerHealthViewSet,
-    BulkConfigurationViewSet
+    BulkConfigurationViewSet,
+    bulk_configuration_export_view,
+    bulk_configuration_import_view,
+    bulk_configuration_validate_view,
 )
 from sms_sender.api.optimization_views import OptimizationViewSet, ConfigurationImportViewSet
 from sms_sender.api.routing_views import (
@@ -73,7 +76,12 @@ urlpatterns = [
     path('templates/<str:template_id>/', campaign_views.get_template_by_id_view, name='get_template_by_id'),
     path('macros/', campaign_views.get_available_macros, name='get_available_macros'),
     path('process-template/', campaign_views.process_message_template, name='process_message_template'),
-    
+
+    # Bulk configuration utilities
+    path('api/bulk-configuration/export/', bulk_configuration_export_view, name='bulk_configuration_export'),
+    path('api/bulk-configuration/import_config/', bulk_configuration_import_view, name='bulk_configuration_import'),
+    path('api/bulk-configuration/validate_import/', bulk_configuration_validate_view, name='bulk_configuration_validate_import'),
+
     # New template management endpoints
     path('api/templates/create-from-campaign/', create_template_from_campaign, name='create_template_from_campaign'),
     path('api/templates/bulk-operations/', bulk_template_operations, name='bulk_template_operations'),

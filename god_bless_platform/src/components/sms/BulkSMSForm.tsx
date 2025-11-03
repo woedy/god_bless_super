@@ -6,6 +6,9 @@
 import React, { useState, useEffect } from 'react'
 import { MessageComposer } from './MessageComposer'
 import { RecipientSelector } from './RecipientSelector'
+import { DeliverySettingsForm } from './DeliverySettingsForm'
+import { DeliveryInfrastructureManager } from './DeliveryInfrastructureManager'
+import type { DeliverySettingsFormValue } from './DeliverySettingsForm'
 import { smsService } from '../../services'
 
 interface BulkSMSFormProps {
@@ -16,16 +19,20 @@ interface BulkSMSFormProps {
     sender_name: string
     subject: string
     provider: string
+    delivery_settings: DeliverySettingsFormValue
+    applied_template_id?: string
   }) => void
   onCancel: () => void
   isLoading?: boolean
+  campaignId?: number | string
 }
 
 export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
   projectId,
   onSubmit,
   onCancel,
-  isLoading = false
+  isLoading = false,
+  campaignId
 }) => {
   const [formData, setFormData] = useState({
     sender_name: '',
@@ -45,10 +52,33 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
   const [macros, setMacros] = useState<Record<string, any>>({})
   const [templates, setTemplates] = useState<any[]>([])
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const [deliveryErrors, setDeliveryErrors] = useState<Partial<Record<keyof DeliverySettingsFormValue | 'custom_delay_range', string>>>({})
+  const [isInfrastructureManagerOpen, setInfrastructureManagerOpen] = useState(false)
+  const [infrastructureRefreshKey, setInfrastructureRefreshKey] = useState(0)
+
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsFormValue>({
+    use_proxy_rotation: true,
+    proxy_rotation_strategy: 'round_robin',
+    use_smtp_rotation: true,
+    smtp_rotation_strategy: 'round_robin',
+    custom_delay_enabled: false,
+    custom_delay_min: 1,
+    custom_delay_max: 5,
+    custom_random_seed: undefined,
+    selected_proxy_ids: [],
+    selected_smtp_account_ids: [],
+    applied_template_id: undefined,
+    adaptive_optimization_enabled: false,
+    carrier_optimization_enabled: false,
+    timezone_optimization_enabled: false
+  })
 
   useEffect(() => {
     loadProvidersAndMacros()
-  }, [])
+    if (campaignId) {
+      hydrateDeliverySettings(campaignId)
+    }
+  }, [campaignId])
 
   const loadProvidersAndMacros = async () => {
     try {
@@ -99,6 +129,23 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
     }
   }
 
+  const hydrateDeliverySettings = async (id: number | string) => {
+    try {
+      const response = await smsService.getCampaignDeliverySettings(id)
+      if (response.success) {
+        const data = response.data
+        setDeliverySettings(prev => ({
+          ...prev,
+          ...data,
+          selected_proxy_ids: data.selected_proxy_ids ?? [],
+          selected_smtp_account_ids: data.selected_smtp_account_ids ?? []
+        }))
+      }
+    } catch (error) {
+      console.warn('Failed to hydrate delivery settings for bulk form', error)
+    }
+  }
+
   const handleChange = (field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -112,6 +159,29 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
         [field]: ''
       }))
     }
+  }
+
+  const validateDeliverySettings = (): boolean => {
+    const newErrors: Partial<Record<keyof DeliverySettingsFormValue | 'custom_delay_range', string>> = {}
+
+    if (deliverySettings.use_smtp_rotation && deliverySettings.selected_smtp_account_ids.length === 0) {
+      newErrors.selected_smtp_account_ids = 'Select at least one SMTP account or disable rotation.'
+    }
+
+    if (deliverySettings.use_proxy_rotation && deliverySettings.selected_proxy_ids.length === 0) {
+      newErrors.selected_proxy_ids = 'Select at least one proxy or disable rotation.'
+    }
+
+    if (deliverySettings.custom_delay_enabled) {
+      if (deliverySettings.custom_delay_min < 0 || deliverySettings.custom_delay_max < 0) {
+        newErrors.custom_delay_range = 'Delay values must be zero or greater.'
+      } else if (deliverySettings.custom_delay_min > deliverySettings.custom_delay_max) {
+        newErrors.custom_delay_range = 'Minimum delay must be less than or equal to maximum delay.'
+      }
+    }
+
+    setDeliveryErrors(newErrors)
+    return Object.keys(newErrors).length === 0
   }
 
   const validateForm = (): boolean => {
@@ -138,7 +208,8 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
     }
 
     setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
+    const deliveryValid = validateDeliverySettings()
+    return Object.keys(newErrors).length === 0 && deliveryValid
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -181,7 +252,9 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
       message: formData.message_template,
       sender_name: formData.sender_name,
       subject: formData.subject,
-      provider: formData.provider
+      provider: formData.provider,
+      delivery_settings: deliverySettings,
+      applied_template_id: deliverySettings.applied_template_id
     })
   }
 
@@ -268,12 +341,38 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
           templates={templates}
           onMessageChange={(message) => handleChange('message_template', message)}
           onMacrosChange={(macros) => handleChange('custom_macros', macros)}
+          onTemplateSelect={(template) => {
+            handleChange('message_template', template.message_template)
+            setDeliverySettings(prev => ({
+              ...prev,
+              applied_template_id: template ? template.template_id ?? template.id : prev.applied_template_id
+            }))
+          }}
         />
-        
+
         {errors.message_template && (
           <p className="mt-1 text-sm text-red-600">{errors.message_template}</p>
         )}
       </div>
+
+      {/* Delivery Settings */}
+      <DeliverySettingsForm
+        value={deliverySettings}
+        onChange={(settings) => {
+          setDeliverySettings(settings)
+          if (settings.applied_template_id) {
+            const template = templates.find(t => (t.template_id ?? t.id) === settings.applied_template_id)
+            if (template && template.message_template && !formData.message_template) {
+              handleChange('message_template', template.message_template)
+            }
+          }
+        }}
+        errors={deliveryErrors}
+        templates={templates}
+        disabled={isLoading}
+        onManageInfrastructure={() => setInfrastructureManagerOpen(true)}
+        refreshKey={infrastructureRefreshKey}
+      />
 
       {/* Recipients */}
       <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -324,6 +423,12 @@ export const BulkSMSForm: React.FC<BulkSMSFormProps> = ({
           {isLoading ? 'Sending...' : `Send to ${recipients.length} Recipients`}
         </button>
       </div>
+
+      <DeliveryInfrastructureManager
+        isOpen={isInfrastructureManagerOpen}
+        onClose={() => setInfrastructureManagerOpen(false)}
+        onUpdated={() => setInfrastructureRefreshKey((prev) => prev + 1)}
+      />
     </form>
   )
 }

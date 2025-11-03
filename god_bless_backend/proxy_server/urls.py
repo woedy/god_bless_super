@@ -1,11 +1,19 @@
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+
 from . import views
+
+router = DefaultRouter()
+router.register(r'api', views.ProxyServerViewSet, basename='proxy-api')
 
 app_name = 'proxy_server'
 
 urlpatterns = [
+    path('', include(router.urls)),
+
     # Proxy management
     path('add/', views.add_proxy_view, name='add_proxy'),
+    path('update/', views.update_proxy_view, name='update_proxy'),
     path('list/', views.get_proxies_view, name='get_proxies'),
     path('delete/', views.delete_proxy_view, name='delete_proxy'),
     

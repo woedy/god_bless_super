@@ -4,7 +4,7 @@ from sms_sender.models import SMSCampaign, SMSMessage, SentSMS, RetryAttempt, Ca
 
 class SMSMessageSerializer(serializers.ModelSerializer):
     """Serializer for individual SMS messages"""
-    
+
     class Meta:
         model = SMSMessage
         fields = [
@@ -17,11 +17,57 @@ class SMSMessageSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'queued_at', 'sent_at', 'delivered_at']
 
 
+class CampaignDeliverySettingsSerializer(serializers.ModelSerializer):
+    """Serializer for campaign delivery settings"""
+
+    class Meta:
+        model = CampaignDeliverySettings
+        fields = [
+            'id', 'campaign', 'use_proxy_rotation', 'proxy_rotation_strategy',
+            'use_smtp_rotation', 'smtp_rotation_strategy', 'custom_delay_enabled',
+            'custom_delay_min', 'custom_delay_max', 'custom_random_seed',
+            'selected_smtp_account_ids', 'selected_proxy_ids', 'applied_template_id',
+            'adaptive_optimization_enabled', 'carrier_optimization_enabled',
+            'timezone_optimization_enabled', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+
+    def validate(self, attrs):
+        errors = {}
+        custom_delay_enabled = attrs.get('custom_delay_enabled', getattr(self.instance, 'custom_delay_enabled', False))
+        if custom_delay_enabled:
+            min_delay = attrs.get('custom_delay_min', getattr(self.instance, 'custom_delay_min', None))
+            max_delay = attrs.get('custom_delay_max', getattr(self.instance, 'custom_delay_max', None))
+            if min_delay is None or max_delay is None:
+                errors['custom_delay_min'] = 'Custom delay range requires both minimum and maximum values.'
+            elif min_delay < 0 or max_delay < 0:
+                errors['custom_delay_min'] = 'Delivery delays must be zero or greater.'
+            elif min_delay > max_delay:
+                errors['custom_delay_max'] = 'Minimum delay cannot be greater than maximum delay.'
+
+        for field in ['selected_smtp_account_ids', 'selected_proxy_ids']:
+            values = attrs.get(field, getattr(self.instance, field, []))
+            if values is None:
+                continue
+            if not isinstance(values, list):
+                errors[field] = 'Expected a list of numeric identifiers.'
+                continue
+            invalid_values = [value for value in values if not isinstance(value, int)]
+            if invalid_values:
+                errors[field] = 'All selections must be numeric identifiers.'
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        return attrs
+
+
 class SMSCampaignSerializer(serializers.ModelSerializer):
     """Serializer for SMS campaigns"""
     messages = SMSMessageSerializer(many=True, read_only=True)
     message_count = serializers.SerializerMethodField()
-    
+    delivery_settings = CampaignDeliverySettingsSerializer(read_only=True)
+
     class Meta:
         model = SMSCampaign
         fields = [
@@ -31,7 +77,7 @@ class SMSCampaignSerializer(serializers.ModelSerializer):
             'use_proxy_rotation', 'use_smtp_rotation', 'status', 'progress',
             'total_recipients', 'messages_sent', 'messages_delivered', 'messages_failed',
             'celery_task_id', 'created_at', 'updated_at', 'started_at', 'completed_at',
-            'messages', 'message_count'
+            'messages', 'message_count', 'delivery_settings'
         ]
         read_only_fields = [
             'id', 'progress', 'messages_sent', 'messages_delivered', 'messages_failed',
@@ -140,21 +186,6 @@ class RetryConfigurationSerializer(serializers.Serializer):
     max_retry_delay = serializers.IntegerField()
     carrier_configs = serializers.DictField()
     error_classifications = serializers.DictField()
-
-
-class CampaignDeliverySettingsSerializer(serializers.ModelSerializer):
-    """Serializer for campaign delivery settings"""
-    
-    class Meta:
-        model = CampaignDeliverySettings
-        fields = [
-            'id', 'campaign', 'use_proxy_rotation', 'proxy_rotation_strategy',
-            'use_smtp_rotation', 'smtp_rotation_strategy', 'custom_delay_enabled',
-            'custom_delay_min', 'custom_delay_max', 'custom_random_seed',
-            'adaptive_optimization_enabled', 'carrier_optimization_enabled',
-            'timezone_optimization_enabled', 'created_at', 'updated_at'
-        ]
-        read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class CampaignTemplateSerializer(serializers.ModelSerializer):
