@@ -1,0 +1,66 @@
+{
+  "parents": {
+    "AT&T": {
+      "keywords": [
+        "New Cingular",
+        "AT&T Mobility",
+        "AT&T",
+        "Cricket",
+        "FirstNet",
+        "First Net",
+        "AT&T Prepaid",
+        "AT&T Wireless"
+      ],
+      "ocns": []
+    },
+    "Verizon": {
+      "keywords": [
+        "Cellco Partnership",
+        "Verizon Wireless",
+        "Verizon",
+        "TracFone",
+        "Straight Talk",
+        "Total by Verizon",
+        "Simple Mobile",
+        "Net10",
+        "Net 10",
+        "Page Plus",
+        "SafeLink",
+        "Visible"
+      ],
+      "ocns": []
+    },
+    "T-Mobile": {
+      "keywords": [
+        "T-Mobile",
+        "TMobile",
+        "MetroPCS",
+        "Metro by T-Mobile",
+        "Sprint Spectrum",
+        "Sprint",
+        "Clearwire",
+        "Mint Mobile",
+        "Ultra Mobile",
+        "Google Fi",
+        "Ting Mobile"
+      ],
+      "ocns": []
+    },
+    "UScellular": {
+      "keywords": [
+        "US Cellular",
+        "United States Cellular"
+      ],
+      "ocns": []
+    },
+    "DISH": {
+      "keywords": [
+        "DISH Wireless",
+        "Boost Mobile",
+        "Boost",
+        "Boost Infinite"
+      ],
+      "ocns": []
+    }
+  }
+}

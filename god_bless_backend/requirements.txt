@@ -31,3 +31,8 @@ django-celery-beat>=2.5.0
 # A/B Testing and Statistical Analysis
 numpy>=1.21.0
 scipy>=1.7.0
+
+
+# Prefix Data
+requests 
+openpyxl
