@@ -11,7 +11,8 @@ import argparse
 import json
 import os
 import sys
-from typing import Iterable, List
+from collections import Counter
+from typing import Iterable, List, Optional
 
 import django
 
@@ -33,6 +34,23 @@ def iter_chunks(items: List[dict], chunk_size: int) -> Iterable[List[dict]]:
         yield items[index:index + chunk_size]
 
 
+def skip_reason(raw: dict) -> Optional[str]:
+    """Determine whether a record should be skipped and why."""
+    prefix = (raw.get('prefix') or '').strip()
+    if not prefix:
+        return 'missing_prefix'
+
+    carrier = (raw.get('carrier') or raw.get('company') or '').strip()
+    if not carrier:
+        return 'missing_carrier'
+
+    last_source = (raw.get('last_source') or '').lower()
+    if 'available' in last_source:
+        return 'unassigned_prefix'
+
+    return None
+
+
 def normalise_record(raw: dict) -> PhonePrefix:
     """Convert a JSON record to a PhonePrefix instance."""
     prefix = (raw.get('prefix') or '').strip()
@@ -44,9 +62,12 @@ def normalise_record(raw: dict) -> PhonePrefix:
     if not prefix:
         raise ValueError('Prefix is required for each record')
 
+    if not carrier:
+        raise ValueError('Carrier is required for each record')
+
     return PhonePrefix(
         prefix=prefix,
-        carrier=carrier or 'Unknown Carrier',
+        carrier=carrier,
         city=city or 'Unknown City',
         state=state or 'Unknown State',
         line_type=line_type or 'Unknown Type',
@@ -102,14 +123,33 @@ def import_prefixes(path: str) -> None:
         print('⚠️  No records found in JSON; nothing to import.')
         return
 
+    # Filter out entries with missing carrier information or unassigned prefixes.
+    skip_counters = Counter()
+    filtered_records = []
+    for raw in records:
+        reason = skip_reason(raw)
+        if reason:
+            skip_counters[reason] += 1
+            continue
+        filtered_records.append(raw)
+
+    skipped_total = sum(skip_counters.values())
+    if skipped_total:
+        reason_summary = ', '.join(f'{reason}: {count}' for reason, count in skip_counters.items())
+        print(f'⚠️  Skipped {skipped_total} records ({reason_summary}).')
+
+    if not filtered_records:
+        print('❌ No eligible carrier records remain after filtering; aborting import.')
+        return
+
     existing_count = PhonePrefix.objects.count()
     if existing_count > 0:
         clear_existing_prefixes(existing_count)
 
-    print(f'📊 Preparing {len(records)} records for import...')
+    print(f'📊 Preparing {len(filtered_records)} carrier records for import (from {len(records)} source rows)...')
 
     imported = 0
-    for chunk in iter_chunks(records, BATCH_SIZE):
+    for chunk in iter_chunks(filtered_records, BATCH_SIZE):
         prefixes = []
         for raw in chunk:
             try:
@@ -122,8 +162,8 @@ def import_prefixes(path: str) -> None:
 
         PhonePrefix.objects.bulk_create(prefixes, ignore_conflicts=True)
         imported += len(prefixes)
-        progress = (imported / len(records)) * 100
-        print(f'📈 Imported {imported}/{len(records)} records ({progress:.1f}%).')
+        progress = (imported / len(filtered_records)) * 100
+        print(f'📈 Imported {imported}/{len(filtered_records)} records ({progress:.1f}%).')
 
     final_count = PhonePrefix.objects.count()
     print(f'✅ Import complete. Database now contains {final_count} records.')
