@@ -15,11 +15,12 @@ from typing import Iterable, List
 
 import django
 
-# Ensure the Django settings module can be discovered.
+# Ensure the Django settings module can be discovered before importing models.
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'god_bless_pro.settings')
 django.setup()
 
+from django.db import connection  # noqa: E402
 from phone_number_validator.models import PhonePrefix  # noqa: E402
 
 BATCH_SIZE = 1000
@@ -67,6 +68,23 @@ def load_json_records(path: str) -> List[dict]:
     return records
 
 
+def clear_existing_prefixes(record_total: int) -> None:
+    """Drop existing rows quickly before bulk re-import."""
+    table_name = PhonePrefix._meta.db_table
+    vendor = connection.vendor
+
+    # Prefer TRUNCATE for PostgreSQL because it is significantly faster
+    # than row-by-row deletion and resets sequences.
+    if vendor == 'postgresql':
+        quoted_table = connection.ops.quote_name(table_name)
+        with connection.cursor() as cursor:
+            cursor.execute(f'TRUNCATE TABLE {quoted_table} RESTART IDENTITY CASCADE;')
+        print(f'🧹 Truncated {record_total} existing records (PostgreSQL fast path).')
+    else:
+        PhonePrefix.objects.all().delete()
+        print(f'🗑️  Cleared {record_total} existing records.')
+
+
 def import_prefixes(path: str) -> None:
     """Import prefix data into PostgreSQL."""
     if not os.path.exists(path):
@@ -86,8 +104,7 @@ def import_prefixes(path: str) -> None:
 
     existing_count = PhonePrefix.objects.count()
     if existing_count > 0:
-        PhonePrefix.objects.all().delete()
-        print(f'🗑️  Cleared {existing_count} existing records.')
+        clear_existing_prefixes(existing_count)
 
     print(f'📊 Preparing {len(records)} records for import...')
 
