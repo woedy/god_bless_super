@@ -2,64 +2,248 @@
   "parents": {
     "AT&T": {
       "keywords": [
-        "New Cingular",
-        "AT&T Mobility",
-        "AT&T",
-        "Cricket",
-        "FirstNet",
-        "First Net",
-        "AT&T Prepaid",
-        "AT&T Wireless"
-      ],
-      "ocns": []
+        "SOUTHWESTERN BELL",
+        "PACIFIC BELL",
+        "NEVADA BELL",
+        "ILLINOIS BELL",
+        "OHIO BELL",
+        "WISCONSIN BELL",
+        "BELLSOUTH",
+        "TELEPORT COMMUNICATIONS AMERICA",
+        "TCA",
+        "TCG"
+      ]
     },
     "Verizon": {
       "keywords": [
-        "Cellco Partnership",
-        "Verizon Wireless",
-        "Verizon",
-        "TracFone",
-        "Straight Talk",
-        "Total by Verizon",
-        "Simple Mobile",
-        "Net10",
-        "Net 10",
-        "Page Plus",
-        "SafeLink",
-        "Visible"
-      ],
-      "ocns": []
+        "MCIMETRO",
+        "MCI WORLDCOM",
+        "MCI COMMUNICATIONS",
+        "TC SYSTEMS, INC."
+      ]
     },
     "T-Mobile": {
       "keywords": [
-        "T-Mobile",
-        "TMobile",
-        "MetroPCS",
-        "Metro by T-Mobile",
-        "Sprint Spectrum",
-        "Sprint",
-        "Clearwire",
-        "Mint Mobile",
-        "Ultra Mobile",
-        "Google Fi",
-        "Ting Mobile"
+        "OMNIPOINT",
+        "AERIAL COMMUNICATIONS",
+        "POWERTEL",
+        "VOICESTREAM"
+      ]
+    },
+    "UScellular": { "keywords": [] },
+    "DISH": { "keywords": ["BOOST MOBILE", "BOOST INFINITE"] },
+
+    "Comcast": {
+      "keywords": [
+        "COMCAST",
+        "XFINITY",
+        "COMCAST IP PHONE",
+        "COMCAST BUSINESS VOICE",
+        "XFINITY VOICE"
       ],
       "ocns": []
     },
-    "UScellular": {
+    "Charter": {
       "keywords": [
-        "US Cellular",
-        "United States Cellular"
+        "CHARTER",
+        "SPECTRUM",
+        "BHN IP ENABLED SERVICES",
+        "BRIGHT HOUSE",
+        "TIME WARNER CABLE",
+        "TIME WARNER CBLE",
+        "BRESNAN",
+        "TWC IP ENABLED SERVICES",
+        "TIME WARNER CABLE INFO SVCS",
+        "SPECTRUM VOICE",
+        "CHARTER FIBERLINK"
       ],
       "ocns": []
     },
-    "DISH": {
+    "Cox": {
       "keywords": [
-        "DISH Wireless",
-        "Boost Mobile",
-        "Boost",
-        "Boost Infinite"
+        "COX COMMUNICATIONS",
+        "COX VIRGINIA TELCOM",
+        "COX FIBERLINK"
       ],
+      "ocns": []
+    },
+    "Lumen": {
+      "keywords": ["LUMEN", "CENTURYLINK", "QWEST", "EMBARQ"],
+      "ocns": []
+    },
+    "Inteliquent": {
+      "keywords": ["INTELIQUENT", "ONVOY"],
+      "ocns": []
+    },
+    "Peerless": {
+      "keywords": ["PEERLESS NETWORK"],
+      "ocns": []
+    },
+    "Bandwidth": {
+      "keywords": ["BANDWIDTH.COM", "BANDWIDTH "],
+      "ocns": []
+    },
+    "Vonage": {
+      "keywords": ["VONAGE AMERICA"],
+      "ocns": []
+    },
+    "Telnyx": {
+      "keywords": ["TELNYX"],
+      "ocns": []
+    },
+    "Skyetel": {
+      "keywords": ["SKYE TELECOM", "SKYETEL"],
+      "ocns": []
+    },
+    "Commio": {
+      "keywords": ["COMMIO", "THINQ"],
+      "ocns": []
+    },
+    "NUSO": {
+      "keywords": ["NUSO"],
+      "ocns": []
+    },
+    "TPx": {
+      "keywords": [
+        "U.S. TELEPACIFIC CORP",
+        "TPX COMMUNICATIONS",
+        "TELEPACIFIC"
+      ],
+      "ocns": []
+    },
+    "Allstream": {
+      "keywords": ["ALLSTREAM", "ELECTRIC LIGHTWAVE"],
+      "ocns": []
+    },
+    "WOW!": {
+      "keywords": [
+        "WOW! INTERNET, CABLE AND PHONE",
+        "WIDEOPENWEST",
+        "WOW "
+      ],
+      "ocns": []
+    },
+    "Mediacom": {
+      "keywords": [
+        "MEDIACOM TELEPHONY",
+        "MEDIACOM COMMUNICATIONS"
+      ],
+      "ocns": []
+    },
+    "Astound": {
+      "keywords": [
+        "ASTOUND BROADBAND",
+        "RCN",
+        "GRANDE COMMUNICATIONS",
+        "WAVE BROADBAND"
+      ],
+      "ocns": []
+    },
+    "Consolidated": {
+      "keywords": ["CONSOLIDATED COMMUNICATIONS"],
+      "ocns": []
+    },
+    "Brightspeed": {
+      "keywords": ["BRIGHTSPEED"],
+      "ocns": []
+    },
+    "GCI": {
+      "keywords": ["GCI COMMUNICATION", "GENERAL COMMUNICATION"],
+      "ocns": []
+    },
+    "Liberty PR": {
+      "keywords": [
+        "LIBERTY COMMUNICATIONS OF PUERTO RICO",
+        "LIBERTY MOBILE PUERTO RICO",
+        "LIBERTY MOBILE USVI"
+      ],
+      "ocns": []
+    },
+    "Claro PR": {
+      "keywords": ["PUERTO RICO TELCO DBA CLARO", "CLARO PUERTO RICO"],
+      "ocns": []
+    },
+    "Lightpath": {
+      "keywords": ["CABLEVISION LIGHTPATH", "LIGHTPATH"],
+      "ocns": []
+    },
+    "First Communications": {
+      "keywords": ["FIRST COMMUNICATIONS"],
+      "ocns": []
+    },
+    "123.Net": {
+      "keywords": ["123.NET"],
+      "ocns": []
+    },
+    "RCLEC": {
+      "keywords": ["RCLEC"],
+      "ocns": []
+    },
+    "AireSpring": {
+      "keywords": ["AIRESPRING"],
+      "ocns": []
+    },
+    "YMax": {
+      "keywords": ["YMAX COMMUNICATIONS"],
+      "ocns": []
+    },
+    "IDT": {
+      "keywords": ["IDT AMERICA"],
+      "ocns": []
+    },
+    "Time Warner Cable (legacy)": {
+      "keywords": [
+        "TIME WARNER CABLE INFO",
+        "TIME WARNER CBL INFO",
+        "TIME WARNER CBLE INFO"
+      ],
+      "ocns": []
+    },
+    "C Spire": {
+      "keywords": ["CELLULAR SOUTH", "C SPIRE"],
+      "ocns": []
+    },
+    "T-Mobile (legacy add)": {
+      "keywords": [
+        "AERIAL COMMUNICATIONS",
+        "POWERTEL",
+        "VOICESTREAM",
+        "OMNIPOINT",
+        "STPCS JOINT VENTURE"
+      ],
+      "ocns": []
+    },
+    "Verizon (legacy add)": {
+      "keywords": [
+        "BELL ATLANTIC MOBILE",
+        "MCIMETRO ACCESS TRANSMISSION SERVICES",
+        "MCI WORLDCOM",
+        "TC SYSTEMS"
+      ],
+      "ocns": []
+    },
+    "Spok": {
+      "keywords": ["USA MOBILITY"],
+      "ocns": []
+    },
+    "American Messaging": {
+      "keywords": ["AMERICAN MESSAGING"],
+      "ocns": []
+    },
+    "Ziply Fiber": {
+      "keywords": ["ZIPLY FIBER"],
+      "ocns": []
+    },
+    "altafiber": {
+      "keywords": ["CINCINNATI BELL", "HAWAIIAN TELCOM"],
+      "ocns": []
+    },
+    "Liberty Latin America": {
+      "keywords": ["LIBERTY MOBILE PUERTO RICO"],
+      "ocns": []
+    },
+    "Claro (\u00c1m\u00e9rica M\u00f3vil)": {
+      "keywords": ["PUERTO RICO TEL", "CLARO PUERTO RICO"],
       "ocns": []
     }
   }

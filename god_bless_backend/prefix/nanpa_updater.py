@@ -4,12 +4,13 @@ NANPA Prefix Updater
 --------------------
 Downloads the latest NANPA CO Code Assignment data (Available + Utilized),
 extracts all .txt/.csv/.xlsx files, parses and normalizes prefixes,
-and saves a unified data.json + carriers.db with proper carrier/type fields.
+and saves a unified data.json + carrier_backup/prefix_data.json with proper carrier/type fields.
 
 This version:
-- Uses parent-only branding for `carrier` (e.g., AT&T, Verizon, T-Mobile, UScellular, DISH)
+- Uses parent-only branding for `carrier` (e.g., AT&T, Verizon, T-Mobile, UScellular, DISH, plus fixed-line parents)
 - Never guesses type: leaves `type` blank unless confidently Mobile / VoIP / Paging / Landline
 - Adds `company_original` to preserve the original NANPA company string
+- Emits unmatched_companies.json to help you improve mapping over time
 
 Usage:
   python nanpa_updater.py                 # full update (scrape nanpa.com, download zips, extract, parse, save)
@@ -18,6 +19,7 @@ Usage:
 
 Requires: requests, openpyxl (install via pip)
 """
+
 import os, json, csv, sys, zipfile, shutil, sqlite3, datetime, argparse, re, copy
 from collections import Counter
 from urllib.parse import urljoin
@@ -29,10 +31,11 @@ from openpyxl import load_workbook
 # ---------------------------- CONFIG ---------------------------------
 INDEX_URL = "https://www.nanpa.com/reports/co-code-reports/cocodes_assign"  # page that lists the ZIPs
 OUTPUT_JSON = "data.json"
-OUTPUT_DB = "carriers.db"
 FILES_DIR = "nanpa_files"
 BACKUP_DIR = "backups"
 ZIPS_DIR = "nanpa_zips"
+CARRIER_BACKUP_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "carrier_backup"))
+CARRIER_BACKUP_PATH = os.path.join(CARRIER_BACKUP_DIR, "prefix_data.json")
 
 CARRIER_CONFIG_PATH = "carrier_config.json"
 
@@ -43,15 +46,27 @@ STATE_MAP = {
 # ----------- BRAND & TYPE CLASSIFICATION (config + normalization) -----------
 DEFAULT_BRAND_CONFIG = {
     "AT&T": {
-        "keywords": ["NEW CINGULAR", "AT&T MOBILITY", "AT&T", "AT AND T", "CRICKET", "FIRSTNET", "FIRST NET", "AT&T WIRELESS"],
+        "keywords": [
+            "NEW CINGULAR", "AT&T MOBILITY", "AT&T", "AT AND T",
+            "CRICKET", "FIRSTNET", "FIRST NET", "AT&T WIRELESS",
+            # legacy RBOCs now under AT&T
+            "SOUTHWESTERN BELL", "PACIFIC BELL", "BELLSOUTH", "AMERITECH", "SNET", "MICHIGAN BELL"
+        ],
         "ocns": []
     },
     "Verizon": {
-        "keywords": ["CELLCO PARTNERSHIP", "VERIZON WIRELESS", "VERIZON", "TRACFONE", "STRAIGHT TALK", "TOTAL BY VERIZON", "SIMPLE MOBILE", "NET10", "NET 10", "PAGE PLUS", "SAFELINK", "VISIBLE"],
+        "keywords": [
+            "CELLCO PARTNERSHIP", "VERIZON WIRELESS", "VERIZON",
+            "TRACFONE", "STRAIGHT TALK", "TOTAL BY VERIZON", "SIMPLE MOBILE",
+            "NET10", "NET 10", "PAGE PLUS", "SAFELINK", "VISIBLE"
+        ],
         "ocns": []
     },
     "T-Mobile": {
-        "keywords": ["T-MOBILE", "TMOBILE", "METROPCS", "METRO BY T-MOBILE", "SPRINT SPECTRUM", "SPRINT", "CLEARWIRE", "MINT MOBILE", "ULTRA MOBILE", "GOOGLE FI", "Ting Mobile"],
+        "keywords": [
+            "T-MOBILE", "TMOBILE", "METROPCS", "METRO BY T-MOBILE", "SPRINT SPECTRUM",
+            "SPRINT", "CLEARWIRE", "MINT MOBILE", "ULTRA MOBILE", "GOOGLE FI", "TING MOBILE"
+        ],
         "ocns": []
     },
     "UScellular": {
@@ -62,11 +77,49 @@ DEFAULT_BRAND_CONFIG = {
         "keywords": ["DISH WIRELESS", "BOOST MOBILE", "BOOST", "BOOST INFINITE"],
         "ocns": []
     },
+    # fixed-line parents (for clean rollup of landline/clec)
+    "Lumen": {
+        "keywords": ["LUMEN", "CENTURYLINK", "QWEST", "EMBARQ", "LEVEL 3"],
+        "ocns": []
+    },
+    "Frontier": {
+        "keywords": ["FRONTIER"],
+        "ocns": []
+    },
+    "Windstream": {
+        "keywords": ["WINDSTREAM", "PAETEC"],
+        "ocns": []
+    }
 }
 
 _BRAND_CONFIG_CACHE = None
 _OCN_PARENT_LOOKUP = {}
 
+# Type keyword families (substring match, uppercased & normalized)
+WIRELESS_KEYWORDS = ["WIRELESS", "MOBILE", "CELL", "PCS", "LTE", "5G", "MOBILITY"]
+VOIP_KEYWORDS     = [
+    "VOIP", "VONAGE", "BANDWIDTH", "LEVEL 3", "L3", "LUMEN VOIP",
+    "TWILIO", "ZOOM PHONE", "GOOGLE VOICE", "INTELIQUENT", "ONVOY",
+    "PEERLESS", "TELNYX", "SKYETEL", "COMMIO", "NUSO", "VOIP INNOVATIONS",
+    "AIRUS", "INTRADO", "FIVE9", "YMAX", "LIGHTPATH", "TPX"
+]
+PAGING_KEYWORDS   = ["PAGING", "USA MOBILITY", "AMERICAN MESSAGING"]
+# Landline identification (only mark Landline if one of these fixed-line brands appears)
+LANDLINE_KEYWORDS = [
+    "FRONTIER", "WINDSTREAM", "CONSOLIDATED COMMUNICATIONS",
+    "CENTURYLINK", "EMBARQ", "QWEST", "LUMEN",
+    "COX", "COMCAST", "COMCAST BUSINESS VOICE", "XFINITY", "CHARTER", "SPECTRUM", "SPECTRUM VOICE",
+    "BRIGHT HOUSE", "TIME WARNER CABLE", "WOW", "MEDIACOM", "RCN", "ASTOUND",
+    "BRIGHTSPEED", "ALLSTREAM", "ELECTRIC LIGHTWAVE", "GCI", "ZIPLY", "LIBERTY", "CLARO",
+    # legacy RBOCs and parents
+    "SOUTHWESTERN BELL", "PACIFIC BELL", "BELLSOUTH", "AMERITECH", "SNET",
+    # Landline arms of AT&T/Verizon when not explicitly wireless
+    "VERIZON", "AT AND T"
+]
+
+# ---------------------------- HELPERS ---------------------------------
+def log(msg: str):
+    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}")
 
 def normalize_company_string(company: str) -> str:
     """Uppercase and collapse punctuation so brand matching is consistent."""
@@ -77,6 +130,37 @@ def normalize_company_string(company: str) -> str:
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
+def load_ocn_parents_csv(path: str = "ocn_parents.csv") -> dict:
+    """Optional overrides mapping OCN -> parent brand."""
+    table = {}
+    fpath = os.path.join(os.path.dirname(__file__), path)
+    if not os.path.exists(fpath):
+        return table
+    try:
+        with open(fpath, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line or line.startswith("#") or "," not in line:
+                    continue
+                ocn, parent = line.split(",", 1)
+                ocn = ocn.strip().upper()
+                parent = parent.strip()
+                if ocn and parent:
+                    table[ocn] = parent
+    except Exception as exc:
+        log(f"WARN: Failed to read {path}: {exc}")
+    return table
+
+def make_session() -> requests.Session:
+    s = requests.Session()
+    s.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NANPA-Updater/1.2",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    })
+    retries = Retry(total=5, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET","HEAD"])
+    s.mount("https://", HTTPAdapter(max_retries=retries))
+    s.mount("http://", HTTPAdapter(max_retries=retries))
+    return s
 
 def load_brand_config(config_path: str = CARRIER_CONFIG_PATH) -> dict:
     """Read brand keywords/ocns from JSON and merge with defaults."""
@@ -95,6 +179,7 @@ def load_brand_config(config_path: str = CARRIER_CONFIG_PATH) -> dict:
     except Exception as exc:
         print(f"WARN: Failed to read {config_path}: {exc}")
 
+    # normalize: keywords -> normalized uppercase strings; OCNs -> uppercase
     normalized = {}
     for parent, details in combined.items():
         keywords = []
@@ -110,7 +195,6 @@ def load_brand_config(config_path: str = CARRIER_CONFIG_PATH) -> dict:
         normalized[parent] = {"keywords": keywords, "ocns": sorted(ocn_set)}
     return normalized
 
-
 def get_brand_config() -> dict:
     global _BRAND_CONFIG_CACHE, _OCN_PARENT_LOOKUP
     if _BRAND_CONFIG_CACHE is None:
@@ -119,40 +203,18 @@ def get_brand_config() -> dict:
         for parent, details in _BRAND_CONFIG_CACHE.items():
             for ocn in details.get("ocns", []):
                 lookup[ocn] = parent
+        ocn_overrides = load_ocn_parents_csv()
+        for ocn, parent in ocn_overrides.items():
+            if parent and parent not in _BRAND_CONFIG_CACHE:
+                _BRAND_CONFIG_CACHE[parent] = {"keywords": [], "ocns": []}
+            lookup[ocn] = parent
         _OCN_PARENT_LOOKUP = lookup
     return _BRAND_CONFIG_CACHE
-
-# Type keyword families (substring match, uppercased & normalized)
-WIRELESS_KEYWORDS = ["WIRELESS", "MOBILE", "CELL", "PCS", "LTE", "5G", "MOBILITY"]
-VOIP_KEYWORDS     = ["VOIP", "VONAGE", "BANDWIDTH", "LEVEL 3", "L3", "LUMEN VOIP", "TWILIO", "ZOOM PHONE", "GOOGLE VOICE"]
-PAGING_KEYWORDS   = ["PAGING", "USA MOBILITY", "AMERICAN MESSAGING"]
-# Landline identification (only mark Landline if one of these fixed-line brands appears)
-LANDLINE_KEYWORDS = [
-    "FRONTIER", "WINDSTREAM", "CONSOLIDATED COMMUNICATIONS",
-    "CENTURYLINK", "EMBARQ", "QWEST", "LUMEN",  # Lumen family (non-Level 3 VOIP)
-    "COX", "COMCAST", "COMCAST BUSINESS VOICE", "XFINITY", "CHARTER", "SPECTRUM", "SPECTRUM VOICE",
-    # Landline arms of AT&T/Verizon when not wireless
-    "VERIZON", "AT AND T"
-]
-
-# ---------------------------- HELPERS ---------------------------------
-def log(msg: str):
-    print(f"[{datetime.datetime.now().strftime('%H:%M:%S')}] {msg}")
-
-def make_session() -> requests.Session:
-    s = requests.Session()
-    s.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) NANPA-Updater/1.2",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    })
-    retries = Retry(total=5, backoff_factor=0.5, status_forcelist=[429, 500, 502, 503, 504], allowed_methods=["GET","HEAD"])
-    s.mount("https://", HTTPAdapter(max_retries=retries))
-    s.mount("http://", HTTPAdapter(max_retries=retries))
-    return s
 
 def normalize_brand(company: str, ocn: str = "", normalized=None) -> str:
     cfg = get_brand_config()
     ocn_lookup = _OCN_PARENT_LOOKUP or {}
+
     ocn = (ocn or "").strip().upper()
     if ocn and ocn in ocn_lookup:
         return ocn_lookup[ocn]
@@ -167,18 +229,23 @@ def normalize_brand(company: str, ocn: str = "", normalized=None) -> str:
                 return brand
     return ""  # unknown parent
 
-
 def detect_type(company: str, brand: str, normalized=None) -> str:
     """Return one of: 'Mobile','VoIP','Paging','Landline','' (blank if unknown)."""
     c = normalized if normalized is not None else normalize_company_string(company)
 
+    # 1) VoIP (most specific)
     if any(kw in c for kw in VOIP_KEYWORDS):
         return "VoIP"
+
+    # 2) Paging
     if any(kw in c for kw in PAGING_KEYWORDS):
         return "Paging"
+
+    # 3) Landline if clearly fixed-line (and not explicitly wireless)
     if any(kw in c for kw in LANDLINE_KEYWORDS) and not any(kw in c for kw in WIRELESS_KEYWORDS):
         return "Landline"
 
+    # 4) Mobile (brand or explicit wireless cues)
     if brand in {"T-Mobile", "UScellular", "DISH"}:
         return "Mobile"
     if brand in {"AT&T", "Verizon"} and any(kw in c for kw in WIRELESS_KEYWORDS):
@@ -186,7 +253,8 @@ def detect_type(company: str, brand: str, normalized=None) -> str:
     if any(kw in c for kw in WIRELESS_KEYWORDS):
         return "Mobile"
 
-    return ""  # unknown
+    # Unknown
+    return ""
 
 def safe_title(s: str) -> str:
     return s.title().replace("_", " ") if s else ""
@@ -197,6 +265,7 @@ def get_zip_links(session: requests.Session) -> list:
     resp = session.get(INDEX_URL, timeout=30)
     resp.raise_for_status()
     html = resp.text
+
     # naive find of hrefs ending with .zip (absolute or relative)
     links = []
     start = 0
@@ -218,6 +287,7 @@ def get_zip_links(session: requests.Session) -> list:
         if href.lower().endswith('.zip'):
             links.append(urljoin(INDEX_URL, href))
         start = i + 4
+
     # de-dup while preserving order
     seen, uniq = set(), []
     for u in links:
@@ -361,7 +431,7 @@ def build_data(out_dir: str):
                     'ocn': ocn,
                     'company': company_original,          # keep for compatibility
                     'company_original': company_original, # explicit original
-                    'carrier_sub': company_original,       # reseller / subsidiary convenience
+                    'carrier_sub': company_original,      # reseller/sub-brand convenience
                     'carrier': carrier,                   # parent-only branding if known
                     'type': _type,                        # may be blank if unknown
                     'rate_center': rate_center,
@@ -380,7 +450,7 @@ def build_data(out_dir: str):
     return data, stats
 
 # ---------------------------- SAVE ---------------------------------
-def backup_json():
+def backup_json_file():
     os.makedirs(BACKUP_DIR, exist_ok=True)
     if os.path.exists(OUTPUT_JSON):
         ts = datetime.datetime.now().strftime('%Y%m%d_%H%M')
@@ -388,49 +458,29 @@ def backup_json():
         log(f"Backup saved -> backups/data_{ts}.json")
 
 def save_json(data: dict):
-    # NOTE: Legacy writes to data.json and backups/carriers.db are disabled per current requirements.
+    # NOTE: Export to data.json is disabled; only maintain carrier_backup/prefix_data.json.
+    # with open(OUTPUT_JSON, 'w', encoding='utf-8') as f:
+    #     json.dump(data, f, ensure_ascii=False, indent=2)
+    # log(f"Wrote {OUTPUT_JSON} ({len(data):,} prefixes)")
+
     try:
-        carrier_backup_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "carrier_backup"))
-        os.makedirs(carrier_backup_dir, exist_ok=True)
-        carrier_backup_path = os.path.join(carrier_backup_dir, "prefix_data.json")
-        with open(carrier_backup_path, 'w', encoding='utf-8') as backup_file:
+        os.makedirs(CARRIER_BACKUP_DIR, exist_ok=True)
+        with open(CARRIER_BACKUP_PATH, 'w', encoding='utf-8') as backup_file:
             json.dump(data, backup_file, ensure_ascii=False, indent=2)
         log(f"Wrote carrier_backup/prefix_data.json ({len(data):,} prefixes)")
     except Exception as exc:
         log(f"WARN: Failed to write carrier_backup/prefix_data.json: {exc}")
 
-def save_sqlite(data: dict):
-    conn = sqlite3.connect(OUTPUT_DB)
-    cur = conn.cursor()
-    cur.execute("DROP TABLE IF EXISTS prefixes")
-    cur.execute(
-        """
-        CREATE TABLE prefixes (
-            prefix TEXT PRIMARY KEY,
-            ocn TEXT,
-            company TEXT,
-            company_original TEXT,
-            carrier_sub TEXT,
-            carrier TEXT,
-            type TEXT,
-            rate_center TEXT,
-            city TEXT,
-            state TEXT,
-            last_source TEXT
-        )
-        """
-    )
-    cur.executemany(
-        "INSERT INTO prefixes (prefix, ocn, company, company_original, carrier_sub, carrier, type, rate_center, city, state, last_source) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        [(
-            rec['prefix'], rec['ocn'], rec['company'], rec['company_original'], rec['carrier_sub'], rec['carrier'], rec['type'], rec['rate_center'], rec['city'], rec['state'], rec['last_source']
-        ) for rec in data.values()]
-    )
-    conn.commit()
-    conn.close()
-    log(f"Wrote {OUTPUT_DB}")
-
 # ---------------------------- SUMMARY ---------------------------------
+def write_unmatched_companies(counter: Counter, path="unmatched_companies.json", top_n=500):
+    try:
+        top = counter.most_common(top_n)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump([{"company": k, "count": v} for k, v in top], f, ensure_ascii=False, indent=2)
+        log(f"Wrote {path} (top {len(top)} unmatched companies)")
+    except Exception as exc:
+        log(f"WARN: Failed to write {path}: {exc}")
+
 def show_summary(data: dict, stats=None):
     total = len(data)
     buckets = {"Mobile":0, "VoIP":0, "Paging":0, "Landline":0, "Unknown":0}
@@ -440,10 +490,12 @@ def show_summary(data: dict, stats=None):
             buckets[t] += 1
         else:
             buckets["Unknown"] += 1
+
     log("---- Update Summary ----")
     log(f"Total Prefixes: {total:,}")
     for k in ["Mobile","Landline","VoIP","Paging","Unknown"]:
         log(f"  {k}: {buckets[k]:,}")
+
     if stats:
         brand_hits = stats.get('brand_hits', 0)
         miss_counter = stats.get('brand_miss_counter')
@@ -454,6 +506,17 @@ def show_summary(data: dict, stats=None):
             for company, count in miss_counter.most_common(5):
                 label = company or "<Blank>"
                 log(f"  {label} ({count})")
+            # Write a JSON for you to improve config easily
+            write_unmatched_companies(miss_counter, path="unmatched_companies.json", top_n=500)
+
+    # Parent carrier distribution (top 10)
+    from collections import Counter as _C
+    parents = _C((rec.get("carrier") or "").strip() for rec in data.values() if rec.get("carrier"))
+    if parents:
+        log("Top carrier parents:")
+        for name, cnt in parents.most_common(10):
+            log(f"  {name}: {cnt:,}")
+
     log("-------------------------")
 
 # ---------------------------- MAIN ---------------------------------
@@ -493,9 +556,8 @@ def main():
     log("Building prefix dataset ...")
     data, stats = build_data(FILES_DIR)
 
-    # backup_json()  # disabled; no longer writing data.json backups
+    # backup_json_file()  # disabled while data.json exports are turned off
     save_json(data)
-    # save_sqlite(data)  # disabled; carriers.db not required for current flow
     show_summary(data, stats)
     log("✅ Update completed successfully!")
 
