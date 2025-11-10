@@ -35,7 +35,7 @@ from typing import Iterable, Optional
 
 ROOT = Path(__file__).resolve().parent.parent
 PYTHON = Path(sys.executable)
-UPDATER = ROOT / "Prefix" / "nanpa_updater.py"
+UPDATER = ROOT / "prefix" / "nanpa_updater.py"
 IMPORTER = ROOT / "import_prefix_data.py"
 MANAGE = ROOT / "manage.py"
 CARRIER_BACKUP = ROOT / "carrier_backup"
@@ -126,7 +126,7 @@ def refresh_prefixes(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Automate the NANPA prefix refresh pipeline.")
-    parser.add_argument("--skip-updater", action="store_true", help="Skip running Prefix/nanpa_updater.py")
+    parser.add_argument("--skip-updater", action="store_true", help="Skip running prefix/nanpa_updater.py")
     parser.add_argument("--skip-import", action="store_true", help="Skip import_prefix_data.py")
     parser.add_argument("--skip-export", action="store_true", help="Skip export_carrier_data + cache copy")
     parser.add_argument("--dry-run", action="store_true", help="Only print commands without executing")
