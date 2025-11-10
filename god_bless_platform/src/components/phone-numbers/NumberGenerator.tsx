@@ -30,6 +30,34 @@ interface CarrierOption {
   supportedLineTypes: string[]
 }
 
+const AREA_CODE_PATTERN = /^\d{3}$/
+
+const normalizeAreaCodeValue = (value: string): string | null => {
+  if (!value) {
+    return null
+  }
+
+  const digitsOnly = value.trim().replace(/\D/g, '')
+  if (digitsOnly.length !== 3 || !AREA_CODE_PATTERN.test(digitsOnly)) {
+    return null
+  }
+
+  return digitsOnly
+}
+
+const extractAreaCodeFromPrefix = (value?: string | null): string | null => {
+  if (!value) {
+    return null
+  }
+
+  const digitsOnly = value.replace(/\D/g, '')
+  if (digitsOnly.length < 3) {
+    return null
+  }
+
+  return digitsOnly.slice(0, 3)
+}
+
 export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
   project,
   onGenerationComplete,
@@ -44,6 +72,8 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
   const [prefix, setPrefix] = useState<string>('')
   const [excludePatterns, setExcludePatterns] = useState<string>('')
   const [autoValidate, setAutoValidate] = useState<boolean>(false)
+  const [areaCodeQueue, setAreaCodeQueue] = useState<string[]>([])
+  const [activeAreaCodeIndex, setActiveAreaCodeIndex] = useState<number>(0)
 
   // UI state
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
@@ -142,56 +172,8 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
     latestTaskIdRef.current = taskId
   }, [])
 
-  // Sync WebSocket progress message into local state for display
-  useEffect(() => {
-    if (taskProgressMessage) {
-      setProgressMessage(taskProgressMessage)
-    }
-  }, [taskProgressMessage])
-
-  // Handle task completion
-  useEffect(() => {
-    if (!currentTaskId) {
-      return
-    }
-
-    if (isCompleted) {
-      const resultData = (task?.result?.data || {}) as Record<string, any>
-      const autoValidationTaskId =
-        resultData.auto_validation_task_id ||
-        resultData.autoValidationTaskId ||
-        resultData.validation_task_id ||
-        resultData.validationTaskId
-
-      if (activeStage !== 'validation' && autoValidationTaskId) {
-        const targetCount =
-          resultData.auto_validation_target_count ||
-          resultData.autoValidationTargetCount ||
-          resultData.validation_target_count ||
-          resultData.validationTargetCount
-
-        setProgressMessage(
-          targetCount
-            ? `Generation completed. Auto-validating ${targetCount} numbers...`
-            : 'Generation completed. Starting auto-validation...'
-        )
-        setActiveStage('validation')
-        trackTaskId(String(autoValidationTaskId))
-        return
-      }
-
-      const resultMessage =
-        typeof resultData.message === 'string'
-          ? resultData.message
-          : undefined
-
-      const completionMessage =
-        resultMessage ||
-        task?.result?.message ||
-        (activeStage === 'validation'
-          ? 'Auto-validation completed successfully!'
-          : 'Generation completed successfully!')
-
+  const finalizeGeneration = useCallback(
+    (completionMessage: string) => {
       setIsGenerating(false)
       setProgressMessage(prev => prev || completionMessage)
 
@@ -201,17 +183,155 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
         onGenerationComplete?.(completionId)
       }
 
+      setAreaCodeQueue([])
+      setActiveAreaCodeIndex(0)
       resetTaskTracking()
+    },
+    [currentTaskId, onGenerationComplete, resetTaskTracking]
+  )
+
+  const startAreaCodeGeneration = useCallback(
+    async (code: string, index: number, total: number): Promise<boolean> => {
+      try {
+        const parsedExcludePatterns = excludePatterns
+          ? excludePatterns
+              .split(',')
+              .map(pattern => pattern.trim())
+              .filter(Boolean)
+          : undefined
+
+        setActiveStage('generation')
+        setProgressMessage(
+          total > 1
+            ? `Starting generation for area code ${code} (${index + 1} of ${total})...`
+            : 'Starting phone number generation...'
+        )
+
+        const params: GenerateNumbersParams = {
+          projectId: project.id,
+          quantity,
+          country: selectedCountry,
+          carrier: selectedCarrier || undefined,
+          lineType: selectedLineType || undefined,
+          autoValidate,
+          areaCodes: [code],
+          prefix: prefix || undefined,
+          excludePatterns: parsedExcludePatterns
+        }
+
+        const response = await phoneNumberService.generateNumbers(params)
+
+        if (response.success) {
+          if (!rootTaskIdRef.current) {
+            rootTaskIdRef.current = response.data.id
+          }
+          trackTaskId(response.data.id)
+          return true
+        }
+
+        throw new Error('Failed to start generation task')
+      } catch (error) {
+        console.error('Generation failed:', error)
+        setIsGenerating(false)
+        setProgressMessage('')
+        onError?.(error instanceof Error ? error.message : 'Generation failed')
+        resetTaskTracking()
+        setAreaCodeQueue([])
+        setActiveAreaCodeIndex(0)
+        return false
+      }
+    },
+    [
+      autoValidate,
+      excludePatterns,
+      onError,
+      prefix,
+      project.id,
+      quantity,
+      resetTaskTracking,
+      selectedCarrier,
+      selectedCountry,
+      selectedLineType,
+      trackTaskId
+    ]
+  )
+
+  // Sync WebSocket progress message into local state for display
+  useEffect(() => {
+    if (taskProgressMessage) {
+      setProgressMessage(taskProgressMessage)
     }
+  }, [taskProgressMessage])
+
+  // Handle task completion
+  useEffect(() => {
+    if (!currentTaskId || !isCompleted) {
+      return
+    }
+
+    const resultData = (task?.result?.data || {}) as Record<string, any>
+    const autoValidationTaskId =
+      resultData.auto_validation_task_id ||
+      resultData.autoValidationTaskId ||
+      resultData.validation_task_id ||
+      resultData.validationTaskId
+
+    if (activeStage !== 'validation' && autoValidationTaskId) {
+      const targetCount =
+        resultData.auto_validation_target_count ||
+        resultData.autoValidationTargetCount ||
+        resultData.validation_target_count ||
+        resultData.validationTargetCount
+
+      setProgressMessage(
+        targetCount
+          ? `Generation completed. Auto-validating ${targetCount} numbers...`
+          : 'Generation completed. Starting auto-validation...'
+      )
+      setActiveStage('validation')
+      trackTaskId(String(autoValidationTaskId))
+      return
+    }
+
+    const resultMessage =
+      typeof resultData.message === 'string'
+        ? resultData.message
+        : undefined
+
+    const completionMessage =
+      resultMessage ||
+      task?.result?.message ||
+      (activeStage === 'validation'
+        ? 'Auto-validation completed successfully!'
+        : 'Generation completed successfully!')
+
+    const hasMoreAreaCodes =
+      areaCodeQueue.length > 0 &&
+      activeAreaCodeIndex < areaCodeQueue.length - 1
+
+    if (hasMoreAreaCodes) {
+      const nextIndex = activeAreaCodeIndex + 1
+      setActiveAreaCodeIndex(nextIndex)
+      startAreaCodeGeneration(
+        areaCodeQueue[nextIndex],
+        nextIndex,
+        areaCodeQueue.length
+      )
+      return
+    }
+
+    finalizeGeneration(completionMessage)
   }, [
     isCompleted,
     currentTaskId,
     activeStage,
     task?.result?.data,
     task?.result?.message,
-    onGenerationComplete,
+    areaCodeQueue,
+    activeAreaCodeIndex,
     trackTaskId,
-    resetTaskTracking
+    startAreaCodeGeneration,
+    finalizeGeneration
   ])
 
   // Handle task failure or cancellation
@@ -230,6 +350,8 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
         (isCancelled ? `${stageLabel} was cancelled` : `${stageLabel} failed`)
       onError?.(failureMessage)
       resetTaskTracking()
+      setAreaCodeQueue([])
+      setActiveAreaCodeIndex(0)
     }
   }, [
     isFailed,
@@ -253,33 +375,59 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
       return
     }
 
+    const rawAreaCodes = areaCode
+      .split(',')
+      .map(code => code.trim())
+      .filter(code => code.length > 0)
+
+    const validAreaCodes: string[] = []
+    const invalidAreaCodes: string[] = []
+
+    rawAreaCodes.forEach(code => {
+      const normalized = normalizeAreaCodeValue(code)
+      if (normalized) {
+        validAreaCodes.push(normalized)
+      } else {
+        invalidAreaCodes.push(code || ' ')
+      }
+    })
+
+    if (invalidAreaCodes.length > 0) {
+      const message =
+        invalidAreaCodes.length === 1
+          ? `Invalid area code: ${invalidAreaCodes[0]}`
+          : `Invalid area codes: ${invalidAreaCodes.join(', ')}`
+      onError?.(message)
+      return
+    }
+
+    const uniqueAreaCodes = Array.from(new Set(validAreaCodes))
+    const fallbackAreaCode = extractAreaCodeFromPrefix(prefix)
+    const candidateAreaCodes =
+      uniqueAreaCodes.length > 0
+        ? uniqueAreaCodes
+        : fallbackAreaCode
+          ? [fallbackAreaCode]
+          : []
+    const finalAreaCodes = candidateAreaCodes.length > 0 ? candidateAreaCodes : ['555']
+
     try {
       setIsGenerating(true)
-      setProgressMessage('Starting phone number generation...')
       setActiveStage('generation')
       rootTaskIdRef.current = null
       latestTaskIdRef.current = null
 
-      const params: GenerateNumbersParams = {
-        projectId: project.id,
-        quantity,
-        country: selectedCountry,
-        carrier: selectedCarrier || undefined,
-        lineType: selectedLineType || undefined,
-        autoValidate,
-        prefix: areaCode || prefix || undefined, // Use area code as prefix if provided
-        excludePatterns: excludePatterns ? excludePatterns.split(',').map(p => p.trim()) : undefined
-      }
+      setAreaCodeQueue(finalAreaCodes)
+      setActiveAreaCodeIndex(0)
 
-      const response = await phoneNumberService.generateNumbers(params)
+      const started = await startAreaCodeGeneration(
+        finalAreaCodes[0],
+        0,
+        finalAreaCodes.length
+      )
 
-      if (response.success) {
-        rootTaskIdRef.current = response.data.id
-        setActiveStage('generation')
-        trackTaskId(response.data.id)
-        setProgressMessage(response.data.progressMessage || 'Generation task started...')
-      } else {
-        throw new Error('Failed to start generation task')
+      if (!started) {
+        return
       }
     } catch (error) {
       console.error('Generation failed:', error)
@@ -287,6 +435,8 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
       setProgressMessage('')
       onError?.(error instanceof Error ? error.message : 'Generation failed')
       resetTaskTracking()
+      setAreaCodeQueue([])
+      setActiveAreaCodeIndex(0)
     }
   }
 
@@ -294,6 +444,8 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
     setIsGenerating(false)
     setProgressMessage('')
     resetTaskTracking()
+    setAreaCodeQueue([])
+    setActiveAreaCodeIndex(0)
   }
 
   const countryOptions = countries.map(country => ({
@@ -310,6 +462,12 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
     value: type,
     label: type.charAt(0).toUpperCase() + type.slice(1)
   }))
+
+  const totalAreaCodes = areaCodeQueue.length
+  const currentAreaCodeLabel =
+    totalAreaCodes > 0
+      ? areaCodeQueue[Math.min(activeAreaCodeIndex, totalAreaCodes - 1)]
+      : undefined
 
   return (
     <Card className="p-6">
@@ -335,6 +493,13 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
             </span>
           </div>
           <ProgressBar progress={progress} className="mb-2" />
+          {currentAreaCodeLabel && (
+            <p className="text-xs text-blue-700 mb-1">
+              Area code {currentAreaCodeLabel}
+              {totalAreaCodes > 1 &&
+                ` (${Math.min(activeAreaCodeIndex + 1, totalAreaCodes)} of ${totalAreaCodes})`}
+            </p>
+          )}
           {progressMessage && (
             <p className="text-sm text-blue-700">{progressMessage}</p>
           )}
@@ -396,14 +561,12 @@ export const NumberGenerator: React.FC<NumberGeneratorProps> = ({
 
         <div className="space-y-4">
           <Input
-            label="Area Code"
+            label="Area Codes"
             value={areaCode}
             onChange={(e) => setAreaCode(e.target.value)}
-            placeholder="e.g., 555, 212, 310"
+            placeholder="e.g., 305, 818, 212"
             disabled={isGenerating}
-            helperText="3-digit area code for generated numbers"
-            maxLength={3}
-            pattern="[0-9]{3}"
+            helperText="Comma-separated 3-digit codes (each code receives the full quantity)"
           />
 
           <Input

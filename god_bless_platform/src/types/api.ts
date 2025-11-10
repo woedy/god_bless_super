@@ -140,6 +140,7 @@ export interface GenerateNumbersParams {
   carrier?: string
   lineType?: string
   autoValidate?: boolean
+  areaCodes?: string[]
   prefix?: string
   excludePatterns?: string[]
 }

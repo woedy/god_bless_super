@@ -79,9 +79,20 @@ class PhoneNumberServiceClass {
       }
     }
 
-    // Use provided area code from prefix, or default
-    let areaCode = '555' // Default area code
-    if (params.prefix) {
+    const normalizedAreaCodes = Array.isArray(params.areaCodes)
+      ? Array.from(
+          new Set(
+            params.areaCodes
+              .map(code => (typeof code === 'string' ? code.trim() : ''))
+              .map(code => code.replace(/\D/g, ''))
+              .filter(code => code.length === 3)
+          )
+        )
+      : []
+
+    // Use provided area codes first, then fall back to prefix/default
+    let areaCode = normalizedAreaCodes[0] || '555'
+    if (!normalizedAreaCodes.length && params.prefix) {
       // If prefix looks like an area code (3 digits), use it
       if (/^\d{3}$/.test(params.prefix)) {
         areaCode = params.prefix
@@ -94,7 +105,7 @@ class PhoneNumberServiceClass {
       }
     }
     
-    const requestData = {
+    const requestData: Record<string, unknown> = {
       user_id: userId,
       project_id: params.projectId,
       area_code: areaCode,
@@ -103,6 +114,10 @@ class PhoneNumberServiceClass {
       type_filter: params.lineType || null,
       auto_validate: params.autoValidate || false, // Send auto-validation preference
       batch_size: 1000 // Default batch size
+    }
+
+    if (normalizedAreaCodes.length > 0) {
+      requestData.area_codes = normalizedAreaCodes
     }
 
     try {
