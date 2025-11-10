@@ -1,0 +1,126 @@
+x-django-env: &django-env
+  SECRET_KEY: ${SECRET_KEY:-local-secret-key-change-me-please}
+  DEBUG: "true"
+  USE_POSTGRES: "true"
+  POSTGRES_DB: ${POSTGRES_DB:-god_bless_db}
+  POSTGRES_USER: ${POSTGRES_USER:-god_bless_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password_123}
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  REDIS_HOST: redis
+  REDIS_PORT: 6379
+  REDIS_PASSWORD: ${REDIS_PASSWORD:-test_redis_password_123}
+  ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,backend}
+  CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+  CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-god_bless_db}
+      POSTGRES_USER: ${POSTGRES_USER:-god_bless_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test_password_123}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-god_bless_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD:-test_redis_password_123}"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-test_redis_password_123}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    command: >
+      sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./god_bless_backend:/app
+    ports:
+      - "8000:8000"
+    environment:
+      <<: *django-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    command: celery -A god_bless_pro worker -l info --concurrency=2
+    volumes:
+      - ./god_bless_backend:/app
+    environment:
+      <<: *django-env
+    depends_on:
+      backend:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    command: celery -A god_bless_pro beat -l info
+    volumes:
+      - ./god_bless_backend:/app
+    environment:
+      <<: *django-env
+    depends_on:
+      backend:
+        condition: service_started
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./god_bless_platform
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000/api}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000/ws}
+      VITE_APP_NAME: ${VITE_APP_NAME:-God Bless Platform}
+      VITE_VERSION: ${VITE_VERSION:-1.0.0}
+      VITE_ENVIRONMENT: ${VITE_ENVIRONMENT:-development}
+    volumes:
+      - ./god_bless_platform:/app
+      - /app/node_modules
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  postgres_data:
+  redis_data:
