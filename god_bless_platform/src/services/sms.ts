@@ -14,7 +14,11 @@ import type {
   SendSMSParams,
   PaginatedResponse,
   FileUploadResponse,
-  TaskActionRequest
+  TaskActionRequest,
+  SendSingleSMSRequest,
+  SingleSMSResponse,
+  SendBulkSMSRequest,
+  BulkSMSResponse
 } from '../types'
 import type { CampaignDeliverySettings } from '../types/rotation'
 
@@ -133,32 +137,17 @@ export class SMSService {
   }
 
   /**
-   * Send single SMS (legacy endpoint)
+   * Send a single SMS via the simplified sender endpoint
    */
-  async sendSingleSMS(params: {
-    user_id: string
-    v_phone_number: string
-    sender_name: string
-    subject: string
-    message: string
-    smtp_id: string
-    provider: string
-  }): Promise<ApiResponse<{ message: string }>> {
-    return apiClient.post<{ message: string }>('/sms-sender/send-single-sms/', params)
+  async sendSingleSMS(payload: SendSingleSMSRequest): Promise<ApiResponse<SingleSMSResponse>> {
+    return apiClient.post<SingleSMSResponse>('/sms-sender/send-single-sms/', payload)
   }
 
   /**
-   * Send bulk SMS (legacy endpoint)
+   * Send a bulk SMS job via the simplified sender endpoint
    */
-  async sendBulkSMS(params: {
-    user_id: string
-    v_phone_numbers: string[]
-    sender_name: string
-    subject: string
-    message: string
-    provider: string
-  }): Promise<ApiResponse<{ message: string }>> {
-    return apiClient.post<{ message: string }>('/sms-sender/send-bulk-sms/', params)
+  async sendBulkSMS(payload: SendBulkSMSRequest): Promise<ApiResponse<BulkSMSResponse>> {
+    return apiClient.post<BulkSMSResponse>('/sms-sender/send-bulk-sms/', payload)
   }
 
   /**

@@ -4,9 +4,10 @@ SMS Campaign Serializers
 
 from rest_framework import serializers
 from .models import (
-    SMSCampaign, SMSMessage, RoutingRule, ServerCapacityWeight, 
-    GeographicRoutingPreference, ABTestExperiment, ABTestVariant, 
-    ABTestAssignment, ABTestResult, CampaignOptimizationRecommendation
+    SMSCampaign, SMSMessage, RoutingRule, ServerCapacityWeight,
+    GeographicRoutingPreference, ABTestExperiment, ABTestVariant,
+    ABTestAssignment, ABTestResult, CampaignOptimizationRecommendation,
+    CampaignDeliverySettings,
 )
 
 
@@ -681,4 +682,89 @@ class CampaignOptimizationRecommendationSerializer(serializers.ModelSerializer):
         """Validate actual improvement percentage"""
         if value is not None and (value < -100 or value > 100):
             raise serializers.ValidationError("Actual improvement must be between -100 and 100 percent")
+        return value
+
+
+class SimpleRecipientSerializer(serializers.Serializer):
+    """Payload serializer for a single SMS recipient."""
+
+    phone_number = serializers.CharField()
+    carrier = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    data = serializers.DictField(required=False, default=dict)
+
+    def validate_phone_number(self, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise serializers.ValidationError("Phone number cannot be empty.")
+        return cleaned
+
+
+class SimpleDeliverySettingsSerializer(serializers.Serializer):
+    """Subset of delivery settings required for ad-hoc sends."""
+
+    use_proxy_rotation = serializers.BooleanField(required=False, default=True)
+    proxy_rotation_strategy = serializers.ChoiceField(
+        choices=[choice[0] for choice in CampaignDeliverySettings._meta.get_field("proxy_rotation_strategy").choices],
+        default="round_robin",
+    )
+    use_smtp_rotation = serializers.BooleanField(required=False, default=True)
+    smtp_rotation_strategy = serializers.ChoiceField(
+        choices=[choice[0] for choice in CampaignDeliverySettings._meta.get_field("smtp_rotation_strategy").choices],
+        default="round_robin",
+    )
+    custom_delay_enabled = serializers.BooleanField(required=False, default=False)
+    custom_delay_min = serializers.IntegerField(required=False, default=1, min_value=0)
+    custom_delay_max = serializers.IntegerField(required=False, default=5, min_value=0)
+    custom_random_seed = serializers.IntegerField(required=False, allow_null=True)
+    selected_proxy_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+    )
+    selected_smtp_account_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        required=False,
+        default=list,
+    )
+    applied_template_id = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    adaptive_optimization_enabled = serializers.BooleanField(required=False, default=False)
+    carrier_optimization_enabled = serializers.BooleanField(required=False, default=False)
+    timezone_optimization_enabled = serializers.BooleanField(required=False, default=False)
+
+    def validate(self, attrs):
+        min_delay = attrs.get("custom_delay_min", 1)
+        max_delay = attrs.get("custom_delay_max", 5)
+        if attrs.get("custom_delay_enabled") and min_delay > max_delay:
+            raise serializers.ValidationError(
+                {"custom_delay_max": "Maximum delay must be greater than or equal to minimum delay."}
+            )
+        return attrs
+
+
+class SingleSMSRequestSerializer(serializers.Serializer):
+    """Request payload for simple single SMS sends."""
+
+    sender_name = serializers.CharField()
+    subject = serializers.CharField(required=False, allow_blank=True)
+    message_template = serializers.CharField()
+    custom_macros = serializers.DictField(required=False, default=dict)
+    provider = serializers.CharField(required=False, allow_blank=True)
+    recipient = SimpleRecipientSerializer()
+    delivery_settings = SimpleDeliverySettingsSerializer()
+
+
+class BulkSMSRequestSerializer(serializers.Serializer):
+    """Request payload for simple bulk SMS sends."""
+
+    sender_name = serializers.CharField()
+    subject = serializers.CharField(required=False, allow_blank=True)
+    message_template = serializers.CharField()
+    custom_macros = serializers.DictField(required=False, default=dict)
+    provider = serializers.CharField(required=False, allow_blank=True)
+    recipients = SimpleRecipientSerializer(many=True, min_length=1)
+    delivery_settings = SimpleDeliverySettingsSerializer()
+
+    def validate_recipients(self, value):
+        if len(value) > 5000:
+            raise serializers.ValidationError("A maximum of 5000 recipients is allowed per request.")
         return value

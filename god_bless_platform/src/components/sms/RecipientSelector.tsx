@@ -22,6 +22,7 @@ interface RecipientSelectorProps {
   targetCarrier?: string
   targetType?: string
   targetAreaCodes?: string[]
+  maxRecipients?: number
 }
 
 type RecipientSource = 'project_numbers' | 'uploaded_file' | 'manual_entry'
@@ -32,7 +33,8 @@ export const RecipientSelector: React.FC<RecipientSelectorProps> = ({
   onRecipientsChange,
   targetCarrier,
   targetType,
-  targetAreaCodes
+  targetAreaCodes,
+  maxRecipients
 }) => {
   const [recipientSource, setRecipientSource] = useState<RecipientSource>('project_numbers')
   const [projectNumbers, setProjectNumbers] = useState<PhoneNumber[]>([])
@@ -47,6 +49,17 @@ export const RecipientSelector: React.FC<RecipientSelectorProps> = ({
     carrier: targetCarrier,
     lineType: targetType
   })
+
+  const limitRecipients = (items: typeof selectedRecipients) => {
+    if (!maxRecipients || items.length <= maxRecipients) {
+      return items
+    }
+    return items.slice(items.length - maxRecipients)
+  }
+
+  const updateRecipients = (items: typeof selectedRecipients) => {
+    onRecipientsChange(limitRecipients(items))
+  }
 
   // Load project numbers when component mounts or projectId changes
   useEffect(() => {
@@ -123,7 +136,7 @@ export const RecipientSelector: React.FC<RecipientSelectorProps> = ({
     setError(null)
     
     // Clear recipients when changing source
-    onRecipientsChange([])
+    updateRecipients([])
   }
 
   const handleNumberSelection = (number: PhoneNumber, selected: boolean) => {
@@ -138,9 +151,9 @@ export const RecipientSelector: React.FC<RecipientSelectorProps> = ({
     }
 
     if (selected) {
-      onRecipientsChange([...selectedRecipients, recipient])
+      updateRecipients([...selectedRecipients, recipient])
     } else {
-      onRecipientsChange(
+      updateRecipients(
         selectedRecipients.filter(r => r.phone_number !== number.number)
       )
     }
@@ -156,11 +169,11 @@ export const RecipientSelector: React.FC<RecipientSelectorProps> = ({
         lineType: number.lineType
       }
     }))
-    onRecipientsChange(allRecipients)
+    updateRecipients(allRecipients)
   }
 
   const handleDeselectAll = () => {
-    onRecipientsChange([])
+    updateRecipients([])
   }
 
   const handleManualNumbersSubmit = () => {
@@ -174,7 +187,7 @@ export const RecipientSelector: React.FC<RecipientSelectorProps> = ({
         data: {}
       }))
 
-    onRecipientsChange(numbers)
+    updateRecipients(numbers)
     setManualNumbers('')
   }
 
@@ -197,7 +210,7 @@ export const RecipientSelector: React.FC<RecipientSelectorProps> = ({
         }
       }).filter(recipient => recipient.phone_number.length > 0)
 
-      onRecipientsChange(recipients)
+      updateRecipients(recipients)
     } catch (error) {
       console.error('Failed to process file:', error)
       setError(error instanceof Error ? error.message : 'Failed to process file')

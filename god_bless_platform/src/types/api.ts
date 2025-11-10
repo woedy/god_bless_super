@@ -244,6 +244,64 @@ export interface SendSMSParams {
   }
 }
 
+export interface SimpleSMSRecipient {
+  phone_number: string
+  carrier?: string
+  data?: Record<string, any>
+}
+
+export type SimpleDeliverySettingsPayload = Pick<
+  CampaignDeliverySettings,
+  | 'use_proxy_rotation'
+  | 'proxy_rotation_strategy'
+  | 'use_smtp_rotation'
+  | 'smtp_rotation_strategy'
+  | 'custom_delay_enabled'
+  | 'custom_delay_min'
+  | 'custom_delay_max'
+  | 'custom_random_seed'
+  | 'selected_proxy_ids'
+  | 'selected_smtp_account_ids'
+  | 'applied_template_id'
+  | 'adaptive_optimization_enabled'
+  | 'carrier_optimization_enabled'
+  | 'timezone_optimization_enabled'
+>
+
+export interface SendSingleSMSRequest {
+  sender_name: string
+  subject?: string
+  message_template: string
+  custom_macros?: Record<string, any>
+  provider?: string
+  recipient: SimpleSMSRecipient
+  delivery_settings: SimpleDeliverySettingsPayload
+}
+
+export interface SendBulkSMSRequest {
+  sender_name: string
+  subject?: string
+  message_template: string
+  custom_macros?: Record<string, any>
+  provider?: string
+  recipients: SimpleSMSRecipient[]
+  delivery_settings: SimpleDeliverySettingsPayload
+}
+
+export interface SingleSMSResponse {
+  campaign_id: number
+  message_id: number
+  delivery_status: string
+  sent_at?: string
+}
+
+export interface BulkSMSResponse {
+  campaign_id: number
+  task_id?: string
+  total_recipients?: number
+  removed_duplicates?: number
+}
+
 export interface CampaignFilters extends PaginationParams {
   projectId?: string
   status?: CampaignStatus

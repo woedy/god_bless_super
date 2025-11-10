@@ -9,9 +9,19 @@ import { AppLayout } from '../../components/layout'
 import { BulkSMSForm } from '../../components/sms'
 import type { DeliverySettingsFormValue } from '../../components/sms/DeliverySettingsForm'
 import { smsService } from '../../services'
-import type { CreateCampaignData } from '../../types'
 import { useProject } from '../../contexts'
 import type { BreadcrumbItem } from '../../types'
+import type { SimpleDeliverySettingsPayload } from '../../types/api'
+
+interface BulkFormSubmitPayload {
+  recipients: Array<{ phone_number: string; carrier?: string; data?: Record<string, any> }>
+  message_template: string
+  custom_macros: Record<string, any>
+  sender_name: string
+  subject: string
+  provider: string
+  delivery_settings: DeliverySettingsFormValue
+}
 
 const breadcrumbs: BreadcrumbItem[] = [
   {
@@ -54,74 +64,38 @@ export function BulkSMSPage() {
     }
   }, [requestedProjectId, currentProjectId, isProjectReady, selectProject])
 
-  const handleSubmit = async (data: {
-    recipients: string[]
-    message: string
-    sender_name: string
-    subject: string
-    provider: string
-    delivery_settings: DeliverySettingsFormValue
-    applied_template_id?: string
-  }) => {
+  const handleSubmit = async (data: BulkFormSubmitPayload) => {
     setIsLoading(true)
     setError(null)
     setSuccess(null)
 
     try {
-      const campaignName = data.subject?.trim()
-        ? data.subject.trim()
-        : `Manual bulk send ${new Date().toLocaleString()}`
-
-      const campaignPayload = {
-        name: campaignName,
-        description: `Manual bulk SMS launched by ${data.sender_name || 'unknown sender'}.`,
-        message_template: data.message,
-        custom_macros: {},
-        target_carrier: '',
-        target_type: '',
-        target_area_codes: [],
-        scheduled_time: '',
-        send_immediately: true,
-        batch_size: 100,
-        rate_limit: 10,
-        use_proxy_rotation: data.delivery_settings.use_proxy_rotation,
-        use_smtp_rotation: data.delivery_settings.use_smtp_rotation,
-        projectId: currentProjectId || '',
-        delivery_settings: {
-          ...data.delivery_settings,
-          applied_template_id: data.applied_template_id ?? data.delivery_settings.applied_template_id
-        }
-      } satisfies CreateCampaignData
-
-      const campaignResponse = await smsService.createCampaign(campaignPayload)
-      if (!campaignResponse.success) {
-        throw new Error('Failed to create campaign record')
+      const payload = {
+        sender_name: data.sender_name,
+        subject: data.subject,
+        message_template: data.message_template,
+        custom_macros: data.custom_macros,
+        provider: data.provider,
+        recipients: data.recipients,
+        delivery_settings: data.delivery_settings as SimpleDeliverySettingsPayload
       }
 
-      const campaign = campaignResponse.data
-
-      await smsService.updateCampaignDeliverySettings(campaign.id, {
-        ...data.delivery_settings,
-        applied_template_id: data.applied_template_id ?? data.delivery_settings.applied_template_id
-      })
-
-      if (data.recipients.length > 0) {
-        await smsService.addCampaignRecipients(
-          campaign.id,
-          data.recipients.map((phone) => ({ phone_number: phone }))
-        )
+      const response = await smsService.sendBulkSMS(payload)
+      if (!response.success) {
+        throw new Error(response.error ?? 'Failed to queue bulk SMS')
       }
 
-      await smsService.startCampaign(campaign.id)
-
-      setSuccess(`Campaign "${campaign.name}" launched for ${data.recipients.length} recipients.`)
-
-      setTimeout(() => {
-        navigate('/sms')
-      }, 2000)
+      const bulkResult = response.data
+      const count = bulkResult?.total_recipients ?? data.recipients.length
+      const taskNote = bulkResult?.task_id ? ` Task ID: ${bulkResult.task_id}` : ''
+      const dedupNote =
+        bulkResult?.removed_duplicates && bulkResult.removed_duplicates > 0
+          ? ` Removed duplicates: ${bulkResult.removed_duplicates}.`
+          : ''
+      setSuccess(`Bulk SMS queued for ${count} recipients.${dedupNote}${taskNote}`)
     } catch (error) {
-      console.error('Failed to launch manual campaign:', error)
-      setError(error instanceof Error ? error.message : 'Failed to launch manual campaign')
+      console.error('Failed to queue bulk SMS:', error)
+      setError(error instanceof Error ? error.message : 'Failed to queue bulk SMS')
     } finally {
       setIsLoading(false)
     }

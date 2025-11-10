@@ -39,13 +39,8 @@ import {
   ValidateNumbersPage,
   NumberListPage,
   SMSPage,
-  CampaignsPage,
-  CreateCampaignPage,
-  CampaignDetailsPage,
-  EditCampaignPage,
+  SingleSMSPage,
   BulkSMSPage,
-  OptimizationPage,
-  TemplatesPage,
   SmsDeliverySettingsPage,
   TasksPage,
   TaskHistoryPage,
@@ -202,37 +197,10 @@ function App() {
                       />
 
                       <Route
-                        path={ROUTES.SMS_CAMPAIGNS}
+                        path={ROUTES.SMS_SINGLE}
                         element={
                           <ProtectedRoute>
-                            <CampaignsPage />
-                          </ProtectedRoute>
-                        }
-                      />
-
-                      <Route
-                        path={ROUTES.SMS_CREATE}
-                        element={
-                          <ProtectedRoute>
-                            <CreateCampaignPage />
-                          </ProtectedRoute>
-                        }
-                      />
-
-                      <Route
-                        path={ROUTES.SMS_CAMPAIGN_VIEW}
-                        element={
-                          <ProtectedRoute>
-                            <CampaignDetailsPage />
-                          </ProtectedRoute>
-                        }
-                      />
-
-                      <Route
-                        path={ROUTES.SMS_CAMPAIGN_EDIT}
-                        element={
-                          <ProtectedRoute>
-                            <EditCampaignPage />
+                            <SingleSMSPage />
                           </ProtectedRoute>
                         }
                       />
@@ -242,24 +210,6 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <BulkSMSPage />
-                          </ProtectedRoute>
-                        }
-                      />
-
-                      <Route
-                        path={ROUTES.SMS_OPTIMIZATION}
-                        element={
-                          <ProtectedRoute>
-                            <OptimizationPage />
-                          </ProtectedRoute>
-                        }
-                      />
-
-                      <Route
-                        path={ROUTES.SMS_TEMPLATES}
-                        element={
-                          <ProtectedRoute>
-                            <TemplatesPage />
                           </ProtectedRoute>
                         }
                       />

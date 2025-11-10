@@ -9,3 +9,6 @@ python nanpa_updater.py
 
 # Reprocess existing ZIPs (skip fetch)
 python nanpa_updater.py --no-fetch
+
+
+python god_bless_backend/scripts/refresh_prefixes.py 

@@ -92,6 +92,12 @@ export type {
   CreateCampaignData,
   CampaignRecipients,
   SendSMSParams,
+  SimpleSMSRecipient,
+  SimpleDeliverySettingsPayload,
+  SendSingleSMSRequest,
+  SendBulkSMSRequest,
+  SingleSMSResponse,
+  BulkSMSResponse,
   CampaignFilters,
   CampaignReportParams,
   
