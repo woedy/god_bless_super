@@ -794,9 +794,12 @@ def export_phone_numbers_task(self, user_id, project_id, format, filters=None,
         
         self.update_progress(90, "Export completed")
         
+        file_url = default_storage.url(file_path)
         result_data = {
             'file_path': file_path,
-            'file_url': default_storage.url(file_path),
+            'file_url': file_url,
+            'download_url': file_url,
+            'downloadUrl': file_url,
             'total_records': total_count,
             'format': format,
             'filename': os.path.basename(file_path)
@@ -1033,4 +1036,3 @@ def import_sms_recipients_task(self, user_id, campaign_id, file_content, file_fo
         logger.error(f"SMS recipient import failed: {str(e)}", exc_info=True)
         self.mark_failed(error_message=str(e))
         raise
-
