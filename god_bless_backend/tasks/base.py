@@ -115,10 +115,53 @@ class ProgressTrackingTask(Task):
     
     def mark_started(self):
         """Mark task as started"""
-        if self.task_progress:
-            self.task_progress.mark_started()
+        task_progress = self._get_task_progress_instance()
+        if task_progress:
+            task_progress.mark_started()
             self._send_progress_notification()
-    
+
+    def mark_completed(self, result_data=None, current_step=None):
+        """Mark task as completed with optional metadata"""
+        task_progress = self._get_task_progress_instance()
+        if not task_progress:
+            return
+
+        if current_step:
+            task_progress.current_step = current_step
+            task_progress.save(update_fields=['current_step'])
+
+        task_progress.mark_success(result_data=result_data or task_progress.result_data or {})
+        self._send_progress_notification()
+
+    def mark_failed(self, error_message, current_step=None):
+        """Mark task as failed and broadcast the error"""
+        task_progress = self._get_task_progress_instance()
+        if not task_progress:
+            return
+
+        if current_step:
+            task_progress.current_step = current_step
+            task_progress.save(update_fields=['current_step'])
+
+        task_progress.mark_failure(error_message)
+        self._send_progress_notification()
+
+    def _get_task_progress_instance(self):
+        """Return the TaskProgress row backing this task if it exists"""
+        if self.task_progress:
+            return self.task_progress
+
+        task_id = getattr(getattr(self, 'request', None), 'id', None)
+        if not task_id:
+            return None
+
+        try:
+            self.task_progress = TaskProgress.objects.get(task_id=task_id)
+            return self.task_progress
+        except TaskProgress.DoesNotExist:
+            logger.error(f"TaskProgress not found for task {task_id}")
+            return None
+
     def _send_progress_notification(self):
         """Send progress update via WebSocket"""
         if self.task_progress:
@@ -262,4 +305,3 @@ class BatchProcessingTask(ProgressTrackingTask):
             )
         
         return processed
-
