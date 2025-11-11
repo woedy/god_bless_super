@@ -312,31 +312,50 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
     }
   }
 
+  const resolvedTaskDownloadUrl =
+    task?.result?.downloadUrl ||
+    (task?.result?.data as any)?.downloadUrl ||
+    (task?.result?.data as any)?.file_url ||
+    (task?.result?.data as any)?.fileUrl ||
+    null
+
+  const resolvedTaskFilename =
+    (task?.result?.data as any)?.filename ||
+    (task?.result?.data as any)?.file_name ||
+    null
+
+  const effectiveDownloadUrl = downloadUrl || resolvedTaskDownloadUrl
+
   const handleDownload = () => {
-    if (downloadUrl) {
-      // Create a temporary link element to trigger download with filename
-      const link = document.createElement('a')
-      link.href = downloadUrl
-      
-      // Ensure the filename has the correct extension for the selected format
-      const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')
-      const defaultFilename = `phone_numbers_${timestamp}.${exportOptions.format}`
-      let filename = exportOptions.downloadFilename || defaultFilename
-      
-      // Double-check the file extension matches the selected format
-      if (!filename.endsWith(`.${exportOptions.format}`)) {
-        const nameWithoutExt = filename.split('.')[0]
-        filename = `${nameWithoutExt}.${exportOptions.format}`
-      }
-      
-      link.download = filename
-      console.log('🔍 ExportDialog - Downloading file:', filename, 'format:', exportOptions.format)
-      
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-      
-      // Clean up the blob URL to free memory
+    if (!effectiveDownloadUrl) {
+      console.warn('Download requested but no URL is available')
+      return
+    }
+
+    // Create a temporary link element to trigger download with filename
+    const link = document.createElement('a')
+    link.href = effectiveDownloadUrl
+    
+    // Ensure the filename has the correct extension for the selected format
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/[:-]/g, '')
+    const defaultFilename = `phone_numbers_${timestamp}.${exportOptions.format}`
+    let filename = exportOptions.downloadFilename || resolvedTaskFilename || defaultFilename
+    
+    // Double-check the file extension matches the selected format
+    if (!filename.endsWith(`.${exportOptions.format}`)) {
+      const nameWithoutExt = filename.split('.')[0]
+      filename = `${nameWithoutExt}.${exportOptions.format}`
+    }
+    
+    link.download = filename
+    console.log('🔍 ExportDialog - Downloading file:', filename, 'format:', exportOptions.format)
+    
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    
+    // Clean up blob URLs only if we generated them locally
+    if (downloadUrl && downloadUrl.startsWith('blob:')) {
       setTimeout(() => {
         URL.revokeObjectURL(downloadUrl)
       }, 1000)
@@ -399,7 +418,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({
         )}
 
         {/* Download Ready */}
-        {downloadUrl && !isExporting && (
+        {effectiveDownloadUrl && !isExporting && (
           <Card className="p-4 bg-green-50">
             <div className="flex items-center justify-between">
               <div>
