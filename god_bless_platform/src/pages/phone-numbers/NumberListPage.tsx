@@ -509,7 +509,6 @@ export function NumberListPage() {
           filters={filters}
           onSuccess={(message) => {
             setSuccessMessage(message)
-            setShowExportDialog(false)
           }}
           onError={handleError}
         />
