@@ -906,13 +906,16 @@ export function useTaskProgress(
 
   const handleProgressMessage = useCallback(
     (message: WebSocketMessage<TaskProgressMessage>) => {
-      if (!taskId || message.data.taskId !== taskId) {
+      const incomingTaskId =
+        (message.data.taskId ?? message.data.task_id) as ID | undefined;
+
+      if (!taskId || incomingTaskId !== taskId) {
         return;
       }
 
       mergeTaskUpdate({
         ...message.data,
-        id: (message.data.taskId ?? message.data.task_id ?? taskId) as ID,
+        id: (incomingTaskId ?? taskId) as ID,
         progressMessage:
           message.data.progressMessage ?? message.data.currentStep ??
           undefined,
@@ -940,13 +943,16 @@ export function useTaskProgress(
 
   const handleCompletionMessage = useCallback(
     (message: WebSocketMessage<TaskCompleteMessage>) => {
-      if (!taskId || message.data.taskId !== taskId) {
+      const incomingTaskId =
+        (message.data.taskId ?? message.data.task_id) as ID | undefined;
+
+      if (!taskId || incomingTaskId !== taskId) {
         return;
       }
 
       mergeTaskUpdate({
         ...message.data,
-        id: (message.data.taskId ?? message.data.task_id ?? taskId) as ID,
+        id: (incomingTaskId ?? taskId) as ID,
         progress: 100,
         result: message.data.result,
         error: message.data.error,
