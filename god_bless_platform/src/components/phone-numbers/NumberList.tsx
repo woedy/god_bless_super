@@ -767,7 +767,6 @@ export const NumberList: React.FC<NumberListProps> = ({
         filters={externalFilters}
         onSuccess={(message) => {
           onSuccess?.(message)
-          setShowExportModal(false)
         }}
         onError={onError}
       />
