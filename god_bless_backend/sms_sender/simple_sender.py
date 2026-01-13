@@ -170,6 +170,8 @@ class SimpleSMSSender:
                 )[:500],
                 message_template=payload["message_template"],
                 custom_macros=payload.get("custom_macros") or {},
+                sender_name=payload.get("sender_name", "SMS")[:100],
+                email_subject=payload.get("subject", "SMS")[:200],
                 target_carrier=payload.get("provider") or "",
                 send_immediately=True,
                 batch_size=min(max(recipient_count, 1), 1000),

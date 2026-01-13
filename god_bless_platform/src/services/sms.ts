@@ -117,7 +117,7 @@ export class SMSService {
    * Get campaign messages with pagination
    */
   async getCampaignMessages(
-    campaignId: string, 
+    campaignId: string,
     params?: { page?: number; page_size?: number; status?: string }
   ): Promise<ApiResponse<PaginatedResponse<any>>> {
     return apiClient.get<PaginatedResponse<any>>(`/sms-sender/campaigns/${campaignId}/messages/`, params)
@@ -127,7 +127,7 @@ export class SMSService {
    * Add recipients to a campaign
    */
   async addCampaignRecipients(
-    campaignId: string, 
+    campaignId: string,
     recipients: Array<{ phone_number: string; carrier?: string; data?: Record<string, any> }>
   ): Promise<ApiResponse<{ created_count: number; errors: any[] }>> {
     return apiClient.post<{ created_count: number; errors: any[] }>(
@@ -440,6 +440,21 @@ export class SMSService {
       success_rate: number
       recent_campaigns: Campaign[]
     }>('/sms-sender/dashboard/')
+  }
+
+  /**
+   * Get dashboard statistics (total campaigns, messages sent/failed)
+   */
+  async getDashboardStats(): Promise<ApiResponse<{
+    total_campaigns: number
+    messages_sent: number
+    messages_failed: number
+  }>> {
+    return apiClient.get<{
+      total_campaigns: number
+      messages_sent: number
+      messages_failed: number
+    }>('/sms-sender/dashboard-stats/')
   }
 
   /**

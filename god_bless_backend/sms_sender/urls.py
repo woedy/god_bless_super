@@ -97,6 +97,9 @@ urlpatterns = [
     # Carrier providers
     path('get-all-carrier-list/', get_all_carrier_list_view, name='get_all_carrier_list'),
     
+    # Dashboard stats
+    path('dashboard-stats/', views.get_dashboard_stats_view, name='get_dashboard_stats'),
+    
     # Smart delivery API endpoints
     path('api/', include(router.urls)),
 ]

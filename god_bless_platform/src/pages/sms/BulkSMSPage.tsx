@@ -1,186 +1,581 @@
 /**
- * Bulk SMS Page
- * Page for sending bulk SMS without creating a campaign
+ * Bulk SMS Page - Step Wizard
+ * Guided wizard for sending bulk SMS with step-by-step navigation
  */
 
-import React, { useState, useEffect } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
-import { BulkSMSForm } from '../../components/sms'
+import { MessageComposer, RecipientSelector } from '../../components/sms'
+import { DeliverySettingsForm } from '../../components/sms/DeliverySettingsForm'
+import { DeliveryInfrastructureManager } from '../../components/sms/DeliveryInfrastructureManager'
 import type { DeliverySettingsFormValue } from '../../components/sms/DeliverySettingsForm'
 import { smsService } from '../../services'
 import { useProject } from '../../contexts'
 import type { BreadcrumbItem } from '../../types'
 import type { SimpleDeliverySettingsPayload } from '../../types/api'
 
-interface BulkFormSubmitPayload {
-  recipients: Array<{ phone_number: string; carrier?: string; data?: Record<string, any> }>
-  message_template: string
-  custom_macros: Record<string, any>
-  sender_name: string
-  subject: string
-  provider: string
-  delivery_settings: DeliverySettingsFormValue
-}
-
 const breadcrumbs: BreadcrumbItem[] = [
-  {
-    label: 'Dashboard',
-    href: '/dashboard'
-  },
-  {
-    label: 'SMS Campaigns',
-    href: '/sms'
-  },
-  {
-    label: 'Send Bulk SMS',
-    href: '/sms/bulk',
-    isActive: true
-  }
+  { label: 'Dashboard', href: '/dashboard' },
+  { label: 'SMS', href: '/sms' },
+  { label: 'Send Bulk SMS', href: '/sms/bulk', isActive: true }
 ]
 
+const steps = [
+  { title: 'Recipients', description: 'Import or select phone numbers' },
+  { title: 'Message', description: 'Compose and personalize' },
+  { title: 'Delivery', description: 'Configure routing' },
+  { title: 'Review', description: 'Confirm and send' }
+]
+
+interface FormState {
+  sender_name: string
+  subject: string
+  message_template: string
+  custom_macros: Record<string, any>
+  provider: string
+}
+
+const defaultDeliverySettings: DeliverySettingsFormValue = {
+  use_proxy_rotation: true,
+  proxy_rotation_strategy: 'round_robin',
+  use_smtp_rotation: true,
+  smtp_rotation_strategy: 'round_robin',
+  custom_delay_enabled: false,
+  custom_delay_min: 1,
+  custom_delay_max: 5,
+  custom_random_seed: undefined,
+  selected_proxy_ids: [],
+  selected_smtp_account_ids: [],
+  applied_template_id: undefined,
+  adaptive_optimization_enabled: false,
+  carrier_optimization_enabled: false,
+  timezone_optimization_enabled: false
+}
+
 export function BulkSMSPage() {
+  const { currentProjectId } = useProject()
   const navigate = useNavigate()
-  const [searchParams] = useSearchParams()
-  const requestedProjectId = searchParams.get('project')
 
-  const {
-    currentProjectId,
-    selectProject,
-    isReady: isProjectReady
-  } = useProject()
-
+  const [currentStep, setCurrentStep] = useState(0)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  const [recipients, setRecipients] = useState<Array<{ phone_number: string; carrier?: string; data?: Record<string, any> }>>([])
+  const [formData, setFormData] = useState<FormState>({
+    sender_name: '',
+    subject: '',
+    message_template: '',
+    custom_macros: {},
+    provider: ''
+  })
+  const [providers, setProviders] = useState<string[]>([])
+  const [macros, setMacros] = useState<Record<string, any>>({})
+  const [templates, setTemplates] = useState<any[]>([])
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({})
+
+  const [deliverySettings, setDeliverySettings] = useState<DeliverySettingsFormValue>(defaultDeliverySettings)
+  const [deliveryErrors, setDeliveryErrors] = useState<Partial<Record<keyof DeliverySettingsFormValue | 'custom_delay_range', string>>>({})
+  const [isInfrastructureManagerOpen, setInfrastructureManagerOpen] = useState(false)
+  const [infrastructureRefreshKey, setInfrastructureRefreshKey] = useState(0)
+
   useEffect(() => {
-    if (!requestedProjectId || !isProjectReady) {
+    loadProvidersMacrosTemplates()
+  }, [])
+
+  const recipientStats = useMemo(() => {
+    const normalized = new Set<string>()
+    recipients.forEach((recipient) => {
+      const normalizedNumber = recipient.phone_number.replace(/\D/g, '')
+      if (normalizedNumber) normalized.add(normalizedNumber)
+    })
+    const total = recipients.length
+    const unique = normalized.size
+    const duplicates = Math.max(total - unique, 0)
+    return { total, unique, duplicates }
+  }, [recipients])
+
+  const messageSegments = useMemo(
+    () => Math.max(1, Math.ceil(formData.message_template.length / 160)),
+    [formData.message_template.length]
+  )
+
+  const loadProvidersMacrosTemplates = async () => {
+    try {
+      const providersResponse = await smsService.getCarrierProviders()
+      if (providersResponse.success && providersResponse.data.providers.length > 0) {
+        setProviders(providersResponse.data.providers)
+        setFormData((prev) => ({ ...prev, provider: prev.provider || providersResponse.data.providers[0] }))
+      } else {
+        throw new Error('No providers returned')
+      }
+    } catch (providerError) {
+      console.warn('Falling back to default providers', providerError)
+      const fallbacks = ['Verizon', 'AT&T', 'T-Mobile']
+      setProviders(fallbacks)
+      setFormData((prev) => ({ ...prev, provider: prev.provider || fallbacks[0] }))
+    }
+
+    try {
+      const macrosResponse = await smsService.getAvailableMacros()
+      if (macrosResponse.success) {
+        setMacros(macrosResponse.data.macros)
+      } else {
+        throw new Error('Macro request failed')
+      }
+    } catch (macroError) {
+      console.warn('Falling back to default macros', macroError)
+      setMacros({
+        FIRST: 'First name',
+        LAST: 'Last name',
+        REF: 'Reference number',
+        TIME: 'Current time',
+        DATE: 'Current date'
+      })
+    }
+
+    try {
+      const templatesResponse = await smsService.getCampaignTemplates()
+      if (templatesResponse.success) {
+        setTemplates(templatesResponse.data.templates)
+      } else {
+        setTemplates([])
+      }
+    } catch {
+      setTemplates([])
+    }
+  }
+
+  const setFieldValue = (field: keyof FormState, value: any) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+    setFieldErrors((prev) => {
+      if (!prev[field]) {
+        return prev
+      }
+      const { [field]: _removed, ...rest } = prev
+      return rest
+    })
+  }
+
+  const validateStep = (stepIndex: number): boolean => {
+    const errors: Record<string, string> = {}
+    
+    if (stepIndex === 0) {
+      if (recipients.length === 0) {
+        errors.recipients = 'Select at least one recipient to continue.'
+      }
+    }
+
+    if (stepIndex === 1) {
+      if (!formData.sender_name.trim()) errors.sender_name = 'Sender name is required.'
+      if (!formData.subject.trim()) errors.subject = 'Subject is required.'
+      if (!formData.provider) errors.provider = 'Provider is required.'
+      if (!formData.message_template.trim()) {
+        errors.message_template = 'Message is required.'
+      }
+    }
+
+    if (stepIndex === 2) {
+      const deliveryValid = validateDeliverySettings()
+      if (!deliveryValid) {
+        return false
+      }
+    }
+
+    setFieldErrors(errors)
+    return Object.keys(errors).length === 0
+  }
+
+  const validateDeliverySettings = (): boolean => {
+    const newErrors: Partial<Record<keyof DeliverySettingsFormValue | 'custom_delay_range', string>> = {}
+
+    if (
+      deliverySettings.use_smtp_rotation &&
+      deliverySettings.selected_smtp_account_ids.length === 0
+    ) {
+      newErrors.selected_smtp_account_ids =
+        'Select at least one SMTP account or disable rotation.'
+    }
+
+    if (
+      deliverySettings.use_proxy_rotation &&
+      deliverySettings.selected_proxy_ids.length === 0
+    ) {
+      newErrors.selected_proxy_ids = 'Select at least one proxy or disable rotation.'
+    }
+
+    if (deliverySettings.custom_delay_enabled) {
+      if (deliverySettings.custom_delay_min < 0 || deliverySettings.custom_delay_max < 0) {
+        newErrors.custom_delay_range = 'Delay values must be zero or greater.'
+      } else if (deliverySettings.custom_delay_min > deliverySettings.custom_delay_max) {
+        newErrors.custom_delay_range =
+          'Minimum delay must be less than or equal to maximum delay.'
+      }
+    }
+
+    setDeliveryErrors(newErrors)
+    return Object.keys(newErrors).length === 0
+  }
+
+  const goToNextStep = () => {
+    if (validateStep(currentStep)) {
+      setCurrentStep((prev) => Math.min(prev + 1, steps.length - 1))
+      setError(null)
+    }
+  }
+
+  const goToPreviousStep = () => {
+    setCurrentStep((prev) => Math.max(prev - 1, 0))
+    setError(null)
+  }
+
+  const handleSend = async () => {
+    if (!validateStep(1) || !validateStep(2)) {
       return
     }
 
-    if (requestedProjectId !== currentProjectId) {
-      void selectProject(requestedProjectId)
+    if (recipients.length === 0) {
+      setFieldErrors({ recipients: 'Select at least one recipient before sending.' })
+      setCurrentStep(0)
+      return
     }
-  }, [requestedProjectId, currentProjectId, isProjectReady, selectProject])
 
-  const handleSubmit = async (data: BulkFormSubmitPayload) => {
     setIsLoading(true)
     setError(null)
     setSuccess(null)
 
     try {
       const payload = {
-        sender_name: data.sender_name,
-        subject: data.subject,
-        message_template: data.message_template,
-        custom_macros: data.custom_macros,
-        provider: data.provider,
-        recipients: data.recipients,
-        delivery_settings: data.delivery_settings as SimpleDeliverySettingsPayload
+        sender_name: formData.sender_name,
+        subject: formData.subject,
+        message_template: formData.message_template,
+        custom_macros: formData.custom_macros,
+        provider: formData.provider,
+        recipients: recipients,
+        delivery_settings: deliverySettings as SimpleDeliverySettingsPayload
       }
 
       const response = await smsService.sendBulkSMS(payload)
       if (!response.success) {
-        throw new Error(response.error ?? 'Failed to queue bulk SMS')
+        const errorMsg = Array.isArray(response.errors) ? response.errors[0] : 'Failed to queue bulk SMS'
+        throw new Error(typeof errorMsg === 'string' ? errorMsg : 'Failed to queue bulk SMS')
       }
 
       const bulkResult = response.data
-      const count = bulkResult?.total_recipients ?? data.recipients.length
-      const taskNote = bulkResult?.task_id ? ` Task ID: ${bulkResult.task_id}` : ''
-      const dedupNote =
-        bulkResult?.removed_duplicates && bulkResult.removed_duplicates > 0
-          ? ` Removed duplicates: ${bulkResult.removed_duplicates}.`
-          : ''
-      setSuccess(`Bulk SMS queued for ${count} recipients.${dedupNote}${taskNote}`)
-    } catch (error) {
-      console.error('Failed to queue bulk SMS:', error)
-      setError(error instanceof Error ? error.message : 'Failed to queue bulk SMS')
+      const count = bulkResult?.total_recipients ?? recipients.length
+      const dedupNote = bulkResult?.removed_duplicates && bulkResult.removed_duplicates > 0
+        ? ` (${bulkResult.removed_duplicates} duplicates removed)`
+        : ''
+      
+      setSuccess(`Bulk SMS queued for ${count} recipients${dedupNote}! Redirecting to dashboard...`)
+      
+      // Redirect to SMS dashboard after 2 seconds
+      setTimeout(() => {
+        navigate('/sms')
+      }, 2000)
+    } catch (sendError) {
+      console.error('Failed to queue bulk SMS:', sendError)
+      setError(sendError instanceof Error ? sendError.message : 'Failed to queue bulk SMS')
     } finally {
       setIsLoading(false)
     }
   }
 
-  const handleCancel = () => {
-    navigate('/sms')
+  const renderStepIndicator = () => (
+    <ol className="mb-8 flex flex-wrap gap-4">
+      {steps.map((step, index) => {
+        const status =
+          index < currentStep ? 'complete' : index === currentStep ? 'current' : 'upcoming'
+        const baseClasses =
+          'flex-1 min-w-[180px] rounded-lg border px-4 py-3 transition-colors duration-150'
+        const statusClasses =
+          status === 'complete'
+            ? 'border-green-200 bg-green-50 text-green-700'
+            : status === 'current'
+              ? 'border-blue-300 bg-blue-50 text-blue-800'
+              : 'border-gray-200 bg-white text-gray-500'
+
+        return (
+          <li key={step.title} className={`${baseClasses} ${statusClasses}`}>
+            <div className="text-xs uppercase tracking-wide text-gray-500">
+              Step {index + 1} of {steps.length}
+            </div>
+            <div className="text-sm font-semibold text-gray-900">{step.title}</div>
+            <div className="text-xs text-gray-600">{step.description}</div>
+          </li>
+        )
+      })}
+    </ol>
+  )
+
+  const renderRecipientsStep = () => (
+    <div className="space-y-4">
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">Select Recipients</h3>
+            <p className="text-sm text-gray-600">
+              Import from project, upload CSV/TXT, or paste numbers manually.
+            </p>
+          </div>
+          <div className="text-sm text-gray-500">
+            {recipients.length > 0 ? `${recipientStats.unique} unique recipients` : 'No recipients selected'}
+          </div>
+        </div>
+
+        <RecipientSelector
+          projectId={currentProjectId || undefined}
+          selectedRecipients={recipients}
+          onRecipientsChange={setRecipients}
+        />
+
+        {fieldErrors.recipients && (
+          <p className="mt-2 text-sm text-red-600">{fieldErrors.recipients}</p>
+        )}
+      </div>
+
+      {recipients.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-blue-900">
+            <div className="text-xs uppercase tracking-wide text-blue-500">Total numbers</div>
+            <div className="text-2xl font-semibold">{recipientStats.total}</div>
+          </div>
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-green-900">
+            <div className="text-xs uppercase tracking-wide text-green-500">Unique</div>
+            <div className="text-2xl font-semibold">{recipientStats.unique}</div>
+          </div>
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-amber-900">
+            <div className="text-xs uppercase tracking-wide text-amber-500">Duplicates</div>
+            <div className="text-2xl font-semibold">{recipientStats.duplicates}</div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+
+  const renderComposeStep = () => (
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Sender & Channel</h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Sender Name *
+            </label>
+            <input
+              type="text"
+              value={formData.sender_name}
+              onChange={(e) => setFieldValue('sender_name', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. Support Team"
+            />
+            {fieldErrors.sender_name && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.sender_name}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Subject *
+            </label>
+            <input
+              type="text"
+              value={formData.subject}
+              onChange={(e) => setFieldValue('subject', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="e.g. Order Update"
+            />
+            {fieldErrors.subject && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.subject}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Provider *
+            </label>
+            <select
+              value={formData.provider}
+              onChange={(e) => setFieldValue('provider', e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Select provider</option>
+              {providers.map((provider) => (
+                <option key={provider} value={provider}>
+                  {provider}
+                </option>
+              ))}
+            </select>
+            {fieldErrors.provider && (
+              <p className="mt-1 text-sm text-red-600">{fieldErrors.provider}</p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Message & Personalization</h3>
+
+        <MessageComposer
+          message={formData.message_template}
+          customMacros={formData.custom_macros}
+          availableMacros={macros}
+          templates={templates}
+          onMessageChange={(msg) => setFieldValue('message_template', msg)}
+          onMacrosChange={(macroMap) => setFieldValue('custom_macros', macroMap)}
+          onTemplateSelect={(template) => {
+            setDeliverySettings((prev) => ({
+              ...prev,
+              applied_template_id: template ? template.template_id ?? template.id : prev.applied_template_id
+            }))
+          }}
+        />
+
+        {fieldErrors.message_template && (
+          <p className="mt-2 text-sm text-red-600">{fieldErrors.message_template}</p>
+        )}
+      </div>
+
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900">
+        {messageSegments} SMS segment{messageSegments > 1 ? 's' : ''} · {formData.message_template.length} characters
+      </div>
+    </div>
+  )
+
+  const renderDeliveryStep = () => (
+    <div className="space-y-6">
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h3 className="text-lg font-semibold text-gray-900 mb-4">Delivery Infrastructure</h3>
+        <DeliverySettingsForm
+          value={deliverySettings}
+          onChange={(settings) => {
+            setDeliverySettings(settings)
+            if (settings.applied_template_id && !formData.message_template) {
+              const template = templates.find(
+                (t) => (t.template_id ?? t.id) === settings.applied_template_id
+              )
+              if (template?.message_template) {
+                setFieldValue('message_template', template.message_template)
+              }
+            }
+          }}
+          errors={deliveryErrors}
+          templates={templates}
+          disabled={isLoading}
+          onManageInfrastructure={() => setInfrastructureManagerOpen(true)}
+          refreshKey={infrastructureRefreshKey}
+        />
+      </div>
+    </div>
+  )
+
+  const renderReviewStep = () => (
+    <div className="space-y-6">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+        <h4 className="font-semibold text-blue-900 mb-4">Review & Confirm</h4>
+        <dl className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-blue-900">
+          <div>
+            <dt className="font-medium text-blue-700">Recipients</dt>
+            <dd className="text-2xl font-semibold mt-1">{recipientStats.unique}</dd>
+            <dd className="text-xs">{recipientStats.duplicates} duplicates will be removed</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-blue-700">Provider</dt>
+            <dd className="text-lg font-semibold mt-1">{formData.provider || 'Not set'}</dd>
+            <dd className="text-xs">Sender: {formData.sender_name || 'Not set'}</dd>
+          </div>
+          <div>
+            <dt className="font-medium text-blue-700">Message Length</dt>
+            <dd className="text-2xl font-semibold mt-1">{formData.message_template.length} chars</dd>
+            <dd className="text-xs">{messageSegments} SMS segments</dd>
+          </div>
+        </dl>
+      </div>
+
+      <div className="bg-white border border-gray-200 rounded-lg p-6">
+        <h4 className="font-semibold text-gray-900 mb-2">Message Preview</h4>
+        <div className="bg-gray-50 rounded p-4 text-sm text-gray-700 whitespace-pre-wrap">
+          {formData.message_template || '(No message)'}
+        </div>
+      </div>
+    </div>
+  )
+
+  const renderStepContent = () => {
+    switch (currentStep) {
+      case 0:
+        return renderRecipientsStep()
+      case 1:
+        return renderComposeStep()
+      case 2:
+        return renderDeliveryStep()
+      case 3:
+      default:
+        return renderReviewStep()
+    }
   }
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <div className="max-w-4xl mx-auto">
-        {/* Page Header */}
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">Send Bulk SMS</h1>
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">Bulk SMS Wizard</h1>
           <p className="text-gray-600 mt-1">
-            Send SMS messages to multiple recipients quickly without creating a campaign.
+            Follow the guided steps to send SMS to multiple recipients.
           </p>
         </div>
 
-        {/* Success Message */}
         {success && (
-          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-green-600">{success}</p>
-                <p className="text-xs text-green-500 mt-1">Redirecting to campaigns...</p>
-              </div>
-            </div>
+          <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md text-sm text-green-700">
+            {success}
           </div>
         )}
 
-        {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-600">{error}</p>
-              </div>
-            </div>
+          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+            {error}
           </div>
         )}
 
-        {/* Bulk SMS Form */}
-        <BulkSMSForm
-          projectId={currentProjectId || undefined}
-          onSubmit={handleSubmit}
-          onCancel={handleCancel}
-          isLoading={isLoading}
-        />
+        {renderStepIndicator()}
+        <div className="space-y-6">{renderStepContent()}</div>
 
-        {/* Information Panel */}
-        <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-6">
-          <h3 className="text-lg font-medium text-blue-900 mb-3">
-            About Bulk SMS
-          </h3>
-          <div className="text-sm text-blue-700 space-y-2">
-            <p>
-              • Bulk SMS allows you to send messages to multiple recipients immediately
-            </p>
-            <p>
-              • Messages are sent using the selected provider and SMTP rotation
-            </p>
-            <p>
-              • For scheduled or more complex campaigns, use the "Create Campaign" feature
-            </p>
-            <p>
-              • You can use macros like @FIRST@, @LAST@, @REF@ for personalization
-            </p>
-            <p>
-              • Messages longer than 160 characters will be split into multiple SMS
-            </p>
-          </div>
+        <div className="mt-8 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={currentStep === 0 ? () => navigate('/sms') : goToPreviousStep}
+            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {currentStep === 0 ? 'Cancel' : 'Back'}
+          </button>
+          {currentStep < steps.length - 1 ? (
+            <button
+              type="button"
+              onClick={goToNextStep}
+              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              Next
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleSend}
+              disabled={isLoading}
+              className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+            >
+              {isLoading ? 'Sending...' : `Send to ${recipientStats.unique} Recipients`}
+            </button>
+          )}
         </div>
       </div>
+
+      <DeliveryInfrastructureManager
+        isOpen={isInfrastructureManagerOpen}
+        onClose={() => setInfrastructureManagerOpen(false)}
+        onUpdated={() => setInfrastructureRefreshKey((prev) => prev + 1)}
+      />
     </AppLayout>
   )
 }

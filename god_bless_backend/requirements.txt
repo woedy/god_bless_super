@@ -36,3 +36,11 @@ scipy>=1.7.0
 # Prefix Data
 requests 
 openpyxl
+
+# Testing dependencies
+pytest
+pytest-django
+pytest-cov
+
+# Proxy Support
+PySocks

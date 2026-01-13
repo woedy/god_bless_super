@@ -708,6 +708,13 @@ const DeliveryInfrastructureManager: React.FC<DeliveryInfrastructureManagerProps
               />
             </label>
           </div>
+          <div className="rounded-md bg-blue-50 p-3 text-xs text-blue-700">
+            <p className="font-semibold">Configuration Tip:</p>
+            <ul className="mt-1 list-disc pl-4 space-y-1">
+              <li><strong>Port 587:</strong> Check <strong>TLS</strong> (Recommended for Gmail/Outlook)</li>
+              <li><strong>Port 465:</strong> Check <strong>SSL</strong></li>
+            </ul>
+          </div>
           <div className="flex flex-wrap items-center gap-4">
             <label className="flex items-center space-x-2 text-sm text-gray-600">
               <input

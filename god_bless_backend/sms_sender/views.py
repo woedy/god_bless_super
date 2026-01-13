@@ -223,3 +223,32 @@ def get_all_carrier_list_view(request):
     payload["data"] = data
 
     return Response(payload, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_dashboard_stats_view(request):
+    """Get aggregated campaign statistics for the authenticated user"""
+    from django.db.models import Sum, Count
+    from sms_sender.models import SMSCampaign
+    
+    user = request.user
+    
+    # Aggregate stats from all campaigns
+    campaign_stats = SMSCampaign.objects.filter(user=user).aggregate(
+        total_campaigns=Count('id'),
+        total_sent=Sum('messages_sent'),
+        total_failed=Sum('messages_failed')
+    )
+    
+    data = {
+        'total_campaigns': campaign_stats['total_campaigns'] or 0,
+        'messages_sent': campaign_stats['total_sent'] or 0,
+        'messages_failed': campaign_stats['total_failed'] or 0
+    }
+    
+    return Response({
+        'message': 'Successful',
+        'data': data
+    }, status=status.HTTP_200_OK)

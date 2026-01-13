@@ -36,6 +36,10 @@ class SMSCampaign(models.Model):
     message_template = models.TextField(help_text="Message template with macro support")
     custom_macros = models.JSONField(default=dict, blank=True, help_text="Custom macro values for this campaign")
     
+    # Email Gateway Settings
+    sender_name = models.CharField(max_length=100, default='SMS', help_text="Sender name for email header")
+    email_subject = models.CharField(max_length=200, default='SMS', help_text="Subject line for email")
+    
     # Targeting
     target_carrier = models.CharField(max_length=50, null=True, blank=True, help_text="Target specific carrier")
     target_type = models.CharField(max_length=20, null=True, blank=True, help_text="Target type (mobile/landline)")

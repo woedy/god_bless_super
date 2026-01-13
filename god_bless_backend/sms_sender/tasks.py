@@ -216,17 +216,52 @@ def send_enhanced_sms_message_simple(message: SMSMessage, smtp: SmtpManager, pro
         
         # Create email message
         email_message = MIMEText(message.message_content)
-        email_message["Subject"] = "SMS"
-        email_message["From"] = smtp.username
+        email_message["Subject"] = campaign.email_subject
+        email_message["From"] = campaign.sender_name
         email_message["To"] = receiver_email
+        
+        # Prepare proxy config if available
+        proxy_config = None
+        if proxy:
+            proxy_config = {
+                'host': proxy.host,
+                'port': proxy.port,
+                'username': proxy.username,
+                'password': proxy.password,
+                'protocol': getattr(proxy, 'protocol', 'socks5')
+            }
+            
+        from .proxy_utils import proxy_socket_connection
         
         # Measure SMTP response time
         smtp_start_time = time.time()
         
-        # Send via SMTP
-        with smtplib.SMTP_SSL(smtp.host, int(smtp.port), context=ssl.create_default_context()) as email_conn:
-            email_conn.login(smtp.username, smtp.password)
-            email_conn.sendmail(smtp.username, receiver_email, email_message.as_string())
+        # Determine connection logic based on flags or port
+        port = int(smtp.port)
+        use_tls = getattr(smtp, 'tls', False) or port == 587
+        use_ssl = getattr(smtp, 'ssl', False) or port == 465
+        
+        # Send via SMTP with optional proxy
+        with proxy_socket_connection(proxy_config):
+            context = ssl.create_default_context()
+            
+            if use_tls:
+                # Use STARTTLS (Explicit TLS)
+                with smtplib.SMTP(smtp.host, port) as email_conn:
+                    email_conn.starttls(context=context)
+                    email_conn.login(smtp.username, smtp.password)
+                    email_conn.sendmail(smtp.username, receiver_email, email_message.as_string())
+            elif use_ssl:
+                # Use SSL (Implicit SSL)
+                with smtplib.SMTP_SSL(smtp.host, port, context=context) as email_conn:
+                    email_conn.login(smtp.username, smtp.password)
+                    email_conn.sendmail(smtp.username, receiver_email, email_message.as_string())
+            else:
+                # Plain SMTP (unencrypted or opportunistic - rare for production SMS/Email)
+                # Defaulting to no encryption connection start, but might fail login if auth requires it
+                with smtplib.SMTP(smtp.host, port) as email_conn:
+                    email_conn.login(smtp.username, smtp.password)
+                    email_conn.sendmail(smtp.username, receiver_email, email_message.as_string())
         
         smtp_response_time = time.time() - smtp_start_time
         message.smtp_response_time = smtp_response_time
@@ -236,6 +271,10 @@ def send_enhanced_sms_message_simple(message: SMSMessage, smtp: SmtpManager, pro
         message.delivery_status = 'sent'
         message.sent_at = timezone.now()
         message.save()
+        
+        # Increment campaign messages_sent counter
+        campaign.messages_sent = (campaign.messages_sent or 0) + 1
+        campaign.save(update_fields=['messages_sent'])
         
         # Record success
         rotation_manager.record_success('smtp', smtp.id, smtp_response_time, message.carrier)
@@ -250,6 +289,10 @@ def send_enhanced_sms_message_simple(message: SMSMessage, smtp: SmtpManager, pro
         message.error_message = str(e)
         message.total_processing_time = time.time() - start_time
         message.save()
+        
+        # Increment campaign messages_failed counter
+        campaign.messages_failed = (campaign.messages_failed or 0) + 1
+        campaign.save(update_fields=['messages_failed'])
         
         # Record failure
         rotation_manager.record_failure('smtp', smtp.id, str(e), 'unknown', message.carrier)

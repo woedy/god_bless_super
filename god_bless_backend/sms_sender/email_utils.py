@@ -28,13 +28,35 @@ def send_sms_via_email(
     email_message["To"] = receiver_email
 
     try:
+        # Prepare proxy config if available (assuming passed via smtp object or unused/not passed here)
+        # Note: send_sms_via_email doesn't currently accept a proxy object argument, 
+        # but for consistency with tasks.py we might want to Add it.
+        # However, for now, let's just leave it as direct connection unless we change the signature.
+        # But wait, the plan said "Accept an optional proxy object".
+        # So I need to change the signature first.
+        
         # Create a connection to the SMTP server
-        with smtplib.SMTP_SSL(
-            smtp.host, smtp.port, context=ssl.create_default_context()
-        ) as email:
-            email.login(sender_email, email_password)
-            email.sendmail(sender_email, receiver_email, email_message.as_string())
-            print(f"Email successfully sent to {receiver_email}")
+        port = int(smtp.port)
+        use_tls = getattr(smtp, 'tls', False) or port == 587
+        use_ssl = getattr(smtp, 'ssl', False) or port == 465
+        context = ssl.create_default_context()
+        
+        if use_tls:
+            with smtplib.SMTP(smtp.host, port) as email:
+                email.starttls(context=context)
+                email.login(sender_email, email_password)
+                email.sendmail(sender_email, receiver_email, email_message.as_string())
+                print(f"Email successfully sent to {receiver_email}")
+        elif use_ssl:
+            with smtplib.SMTP_SSL(smtp.host, port, context=context) as email:
+                email.login(sender_email, email_password)
+                email.sendmail(sender_email, receiver_email, email_message.as_string())
+                print(f"Email successfully sent to {receiver_email}")
+        else:
+            with smtplib.SMTP(smtp.host, port) as email:
+                email.login(sender_email, email_password)
+                email.sendmail(sender_email, receiver_email, email_message.as_string())
+                print(f"Email successfully sent to {receiver_email}")
 
             #add data to databae
             

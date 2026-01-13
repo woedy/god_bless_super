@@ -3,10 +3,11 @@
  * Simple hub that highlights single and bulk sending flows
  */
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AppLayout } from '../../components/layout'
 import { ROUTES } from '../../config/routes'
+import { smsService } from '../../services'
 import type { BreadcrumbItem } from '../../types'
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -29,8 +30,83 @@ const cards = [
   }
 ]
 
+interface DashboardStats {
+  totalCampaigns: number
+  messagesSent: number
+  messagesFailed: number
+  smtpServers: number
+  proxyServers: number
+}
+
 export function SMSPage() {
   const navigate = useNavigate()
+  const [stats, setStats] = useState<DashboardStats>({
+    totalCampaigns: 0,
+    messagesSent: 0,
+    messagesFailed: 0,
+    smtpServers: 0,
+    proxyServers: 0
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadDashboardStats()
+  }, [])
+
+  const loadDashboardStats = async () => {
+    try {
+      const [smtpResponse, proxyResponse, statsResponse] = await Promise.all([
+        smsService.getSmtpAccounts(),
+        smsService.getProxyServers(),
+        smsService.getDashboardStats()
+      ])
+
+      console.log('SMTP Response:', smtpResponse)
+      console.log('Proxy Response:', proxyResponse)
+      console.log('Stats Response:', statsResponse)
+
+      // Count active SMTP servers
+      let smtpCount = 0
+      if (smtpResponse.success && smtpResponse.data) {
+        if (Array.isArray(smtpResponse.data)) {
+          smtpCount = smtpResponse.data.filter((s: any) => s.active && !s.is_archived).length
+        }
+      }
+
+      // Count active proxy servers
+      let proxyCount = 0
+      if (proxyResponse.success && proxyResponse.data) {
+        if (Array.isArray(proxyResponse.data)) {
+          proxyCount = proxyResponse.data.filter((p: any) => p.is_active).length
+        } else if ((proxyResponse.data as any)?.proxies) {
+          proxyCount = (proxyResponse.data as any).proxies.filter((p: any) => p.is_active).length
+        }
+      }
+
+      const campaignStats = statsResponse.success && statsResponse.data
+        ? statsResponse.data
+        : { total_campaigns: 0, messages_sent: 0, messages_failed: 0 }
+
+      setStats({
+        totalCampaigns: campaignStats.total_campaigns,
+        messagesSent: campaignStats.messages_sent,
+        messagesFailed: campaignStats.messages_failed,
+        smtpServers: smtpCount,
+        proxyServers: proxyCount
+      })
+    } catch (error) {
+      console.error('Failed to load dashboard stats:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const statCards = [
+    { label: 'Active SMTP Servers', value: stats.smtpServers, color: 'blue' },
+    { label: 'Active Proxy Servers', value: stats.proxyServers, color: 'green' },
+    { label: 'Messages Sent', value: stats.messagesSent, color: 'purple' },
+    { label: 'Messages Failed', value: stats.messagesFailed, color: 'red' }
+  ]
 
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
@@ -43,6 +119,19 @@ export function SMSPage() {
           </p>
         </div>
 
+        {/* Dashboard Stats */}
+        <div className="grid gap-4 md:grid-cols-4">
+          {statCards.map((stat) => (
+            <div key={stat.label} className="bg-white border border-gray-200 rounded-lg shadow-sm p-4">
+              <div className="text-sm font-medium text-gray-500">{stat.label}</div>
+              <div className={`text-2xl font-bold mt-2 text-${stat.color}-600`}>
+                {loading ? '...' : (stat.value ?? 0)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Action Cards */}
         <div className="grid gap-6 md:grid-cols-2">
           {cards.map((card) => (
             <div key={card.title} className="bg-white border border-gray-200 rounded-xl shadow-sm p-6 flex flex-col">
