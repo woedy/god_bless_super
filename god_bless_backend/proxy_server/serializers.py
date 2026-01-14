@@ -14,12 +14,14 @@ class ProxyServerSerializer(serializers.ModelSerializer):
         model = ProxyServer
         fields = [
             'id', 'host', 'port', 'username', 'password', 'protocol',
-            'is_active', 'is_healthy', 'last_health_check', 'health_check_failures',
+            'is_active', 'is_healthy', 'last_health_check', 'last_health_check_latency_ms',
+            'last_health_check_status_code', 'last_health_check_error', 'health_check_failures',
             'total_requests', 'successful_requests', 'failed_requests', 'last_used',
             'is_archived', 'created_at', 'updated_at', 'proxy_url', 'success_rate'
         ]
         read_only_fields = [
-            'is_healthy', 'last_health_check', 'health_check_failures',
+            'is_healthy', 'last_health_check', 'last_health_check_latency_ms',
+            'last_health_check_status_code', 'last_health_check_error', 'health_check_failures',
             'total_requests', 'successful_requests', 'failed_requests', 'last_used',
             'created_at', 'updated_at'
         ]

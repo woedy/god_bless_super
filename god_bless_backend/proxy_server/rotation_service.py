@@ -112,20 +112,35 @@ class ProxyRotationService:
                 proxies=proxies,
                 timeout=self.HEALTH_CHECK_TIMEOUT
             )
+            elapsed_ms = None
+            try:
+                elapsed_ms = int(response.elapsed.total_seconds() * 1000)
+            except Exception:
+                elapsed_ms = None
             
             if response.status_code == 200:
                 proxy.is_healthy = True
                 proxy.health_check_failures = 0
                 proxy.last_health_check = timezone.now()
+                proxy.last_health_check_status_code = response.status_code
+                proxy.last_health_check_latency_ms = elapsed_ms
+                proxy.last_health_check_error = None
                 proxy.save()
                 return True
             else:
+                proxy.last_health_check = timezone.now()
+                proxy.last_health_check_status_code = response.status_code
+                proxy.last_health_check_latency_ms = elapsed_ms
+                proxy.last_health_check_error = f"HTTP {response.status_code}"
                 proxy.mark_failure()
                 return False
                 
         except Exception as e:
             proxy.mark_failure()
             proxy.last_health_check = timezone.now()
+            proxy.last_health_check_status_code = None
+            proxy.last_health_check_latency_ms = None
+            proxy.last_health_check_error = str(e)
             proxy.save()
             return False
     

@@ -4,17 +4,14 @@
  */
 
 import { apiClient } from './api'
-import { authService } from './auth'
 import type {
   ApiResponse,
   CreateCampaignData,
   Campaign,
   CampaignFilters,
   CampaignReportParams,
-  SendSMSParams,
   PaginatedResponse,
   FileUploadResponse,
-  TaskActionRequest,
   SendSingleSMSRequest,
   SingleSMSResponse,
   SendBulkSMSRequest,
@@ -35,7 +32,7 @@ export class SMSService {
    * Get all campaigns for the current user
    */
   async getCampaigns(filters?: CampaignFilters): Promise<ApiResponse<Campaign[]>> {
-    return apiClient.get<Campaign[]>('/sms-sender/campaigns/', filters)
+    return apiClient.get<Campaign[]>('/sms-sender/campaigns/', filters as unknown as Record<string, unknown> | undefined)
   }
 
   /**
@@ -110,7 +107,10 @@ export class SMSService {
    * Get campaign statistics and report
    */
   async getCampaignReport(campaignId: string, params?: CampaignReportParams): Promise<ApiResponse<any>> {
-    return apiClient.get<any>(`/sms-sender/campaigns/${campaignId}/stats/`, params)
+    return apiClient.get<any>(
+      `/sms-sender/campaigns/${campaignId}/stats/`,
+      params as unknown as Record<string, unknown> | undefined
+    )
   }
 
   /**
@@ -155,8 +155,8 @@ export class SMSService {
    * Note: This endpoint may not be implemented yet on the backend
    */
   async uploadExternalNumbers(
-    file: File,
-    additionalData?: { campaign_id?: string; validate_numbers?: boolean }
+    _file: File,
+    _additionalData?: { campaign_id?: string; validate_numbers?: boolean }
   ): Promise<ApiResponse<FileUploadResponse>> {
     // TODO: Implement this endpoint on the backend
     throw new Error('Upload external numbers endpoint not implemented yet')
@@ -223,10 +223,25 @@ export class SMSService {
   }
 
   /**
-   * Get proxy servers available to the authenticated user
+   * Retrieve proxy servers owned by the authenticated user
    */
-  async getProxyServers(): Promise<ApiResponse<any[]>> {
-    return apiClient.get<any[]>('/proxy-server/api/')
+  async getProxies(params?: { page?: number; page_size?: number }): Promise<ApiResponse<any>> {
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.append('page', params.page.toString())
+    if (params?.page_size) queryParams.append('page_size', params.page_size.toString())
+    
+    const url = queryParams.toString() ? `proxy-server/list/?${queryParams}` : 'proxy-server/list/'
+    const response = await apiClient.get<any>(url)
+
+    // Backend uses envelope: { message: 'Successful', data: { results, count, ... } }
+    // Normalize so callers can use response.data.results directly.
+    const payload = response.data as any
+    const normalizedData = payload?.data ?? payload
+
+    return {
+      ...response,
+      data: normalizedData
+    }
   }
 
   /**
@@ -255,7 +270,7 @@ export class SMSService {
       payload.password = proxy.password
     }
 
-    return apiClient.post<any>('/proxy-server/api/', payload)
+    return apiClient.post<any>('proxy-server/api/', payload)
   }
 
   /**
@@ -293,14 +308,49 @@ export class SMSService {
       payload.is_active = updates.is_active
     }
 
-    return apiClient.patch<any>(`/proxy-server/api/${proxyId}/`, payload)
+    return apiClient.patch<any>(`proxy-server/api/${proxyId}/`, payload)
   }
 
   /**
    * Delete a proxy server configuration
    */
   async deleteProxyServer(proxyId: number | string): Promise<ApiResponse<void>> {
-    return apiClient.delete<void>(`/proxy-server/api/${proxyId}/`)
+    return apiClient.delete<void>(`proxy-server/api/${proxyId}/`)
+  }
+
+  /**
+   * Run a live health check for a single proxy owned by the authenticated user
+   */
+  async checkProxyHealth(proxyId: number | string): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('proxy-server/health/check/', { proxy_id: Number(proxyId) })
+  }
+
+  /**
+   * Run live health checks for all proxies owned by the authenticated user
+   */
+  async checkAllProxiesHealth(): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('proxy-server/health/check-all/', {})
+  }
+
+  /**
+   * Download proxies from GeoNode and test their health
+   */
+  async downloadAndTestProxies(options: { protocols?: string[], limit?: number }): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('proxy-server/download/', options)
+  }
+
+  /**
+   * Get status of proxy download task
+   */
+  async getProxyDownloadStatus(taskId: string): Promise<ApiResponse<any>> {
+    return apiClient.get<any>(`proxy-server/download/status/${taskId}/`)
+  }
+
+  /**
+   * Clean up unhealthy proxies
+   */
+  async cleanupUnhealthyProxies(): Promise<ApiResponse<any>> {
+    return apiClient.post<any>('proxy-server/cleanup/', {})
   }
 
   /**

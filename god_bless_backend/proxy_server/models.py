@@ -24,6 +24,9 @@ class ProxyServer(models.Model):
     is_active = models.BooleanField(default=True)
     is_healthy = models.BooleanField(default=True)
     last_health_check = models.DateTimeField(null=True, blank=True)
+    last_health_check_latency_ms = models.IntegerField(null=True, blank=True)
+    last_health_check_status_code = models.IntegerField(null=True, blank=True)
+    last_health_check_error = models.TextField(null=True, blank=True)
     health_check_failures = models.IntegerField(default=0)
     
     # Usage tracking

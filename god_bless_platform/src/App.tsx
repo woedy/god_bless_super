@@ -42,6 +42,7 @@ import {
   SingleSMSPage,
   BulkSMSPage,
   SmsDeliverySettingsPage,
+  ProxyHealthCheckerPage,
   TasksPage,
   TaskHistoryPage,
   ActiveTasksPage,
@@ -219,6 +220,15 @@ function App() {
                         element={
                           <ProtectedRoute>
                             <SmsDeliverySettingsPage />
+                          </ProtectedRoute>
+                        }
+                      />
+
+                      <Route
+                        path={ROUTES.PROXY_HEALTH_CHECKER}
+                        element={
+                          <ProtectedRoute>
+                            <ProxyHealthCheckerPage />
                           </ProtectedRoute>
                         }
                       />

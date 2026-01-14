@@ -63,6 +63,7 @@ export const ROUTES = {
   // Settings
   SETTINGS: '/settings',
   SMS_DELIVERY_SETTINGS: '/settings/sms/delivery',
+  PROXY_HEALTH_CHECKER: '/settings/proxy/health',
   PROFILE: '/profile',
 } as const
 
@@ -81,6 +82,7 @@ export const ROUTE_METADATA: Record<string, { label: string }> = {
   [ROUTES.SMS_OPTIMIZATION]: { label: 'SMS Optimization' },
   [ROUTES.SMS_TEMPLATES]: { label: 'Campaign Templates' },
   [ROUTES.SMS_DELIVERY_SETTINGS]: { label: 'SMS Delivery Infrastructure' },
+  [ROUTES.PROXY_HEALTH_CHECKER]: { label: 'Proxy Health Checker' },
   [ROUTES.TASKS]: { label: 'Tasks' },
   'generate': { label: 'Generate' },
   'validate': { label: 'Validate' },

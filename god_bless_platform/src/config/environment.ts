@@ -68,9 +68,14 @@ function validateEnvironment(): void {
 function createEnvironmentConfig(): EnvironmentConfig {
   validateEnvironment()
 
+  let apiUrl = import.meta.env.VITE_API_URL as string
+  while (apiUrl.includes('/api/api')) {
+    apiUrl = apiUrl.replace('/api/api', '/api')
+  }
+
   return {
     // API Configuration
-    apiUrl: import.meta.env.VITE_API_URL,
+    apiUrl,
     wsUrl: import.meta.env.VITE_WS_URL,
     
     // Application Configuration

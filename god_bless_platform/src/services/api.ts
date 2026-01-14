@@ -143,8 +143,19 @@ class HttpApiClient {
    */
   private buildUrl(endpoint: string): string {
     const baseUrl = this.config.baseURL.replace(/\/$/, '')
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
-    return `${baseUrl}${cleanEndpoint}`
+    let cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+
+    // Avoid double-prefixing `/api` when VITE_API_URL already ends with `/api`
+    // and a caller passes an endpoint that also starts with `/api/`.
+    if (baseUrl.endsWith('/api') && cleanEndpoint.startsWith('/api/')) {
+      cleanEndpoint = cleanEndpoint.substring('/api'.length)
+    }
+
+    let url = `${baseUrl}${cleanEndpoint}`
+    while (url.includes('/api/api/')) {
+      url = url.replace('/api/api/', '/api/')
+    }
+    return url
   }
 
   /**

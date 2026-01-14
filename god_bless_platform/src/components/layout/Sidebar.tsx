@@ -138,6 +138,18 @@ export function Sidebar({ isCollapsed, onToggle: _onToggle, className = '' }: Si
             </svg>
           )
         }
+        ,
+        {
+          id: 'proxy-health-checker',
+          label: 'Proxy Health Checker',
+          href: '/settings/proxy/health',
+          icon: (
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z" />
+            </svg>
+          )
+        }
       ]
     },
     {

@@ -8,11 +8,13 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from django.contrib.auth import get_user_model
+from celery.result import AsyncResult
 
 from .models import ProxyServer, RotationSettings
 from .serializers import ProxyServerSerializer, RotationSettingsSerializer
 from .rotation_service import ProxyRotationService
 from .delivery_delay_service import DeliveryDelayService
+from .tasks import download_and_test_proxies_task, cleanup_unhealthy_proxies_task
 
 User = get_user_model()
 
@@ -156,17 +158,49 @@ def update_proxy_view(request):
 @permission_classes([IsAuthenticated])
 @authentication_classes([TokenAuthentication])
 def get_proxies_view(request):
-    """Get all proxies for a user"""
+    """Get all proxies for a user with pagination"""
     payload = {}
     errors = {}
     
-    proxies = ProxyServer.objects.filter(user=request.user, is_archived=False).order_by('-created_at')
-    serializer = ProxyServerSerializer(proxies, many=True)
-    
-    payload['message'] = 'Successful'
-    payload['data'] = {'proxies': serializer.data}
-    
-    return Response(payload, status=status.HTTP_200_OK)
+    try:
+        # Get pagination parameters
+        page = int(request.query_params.get('page', 1))
+        page_size = int(request.query_params.get('page_size', 20))
+        
+        # Validate pagination parameters
+        if page < 1:
+            page = 1
+        if page_size < 1 or page_size > 100:
+            page_size = 20
+        
+        proxies = ProxyServer.objects.filter(user=request.user, is_archived=False).order_by('-created_at')
+        
+        # Apply pagination
+        from django.core.paginator import Paginator
+        paginator = Paginator(proxies, page_size)
+        page_obj = paginator.get_page(page)
+        
+        # Serialize the page results
+        serializer = ProxyServerSerializer(page_obj.object_list, many=True)
+        
+        payload['message'] = 'Successful'
+        payload['data'] = {
+            'results': serializer.data,
+            'count': paginator.count,
+            'current_page': page,
+            'total_pages': paginator.num_pages,
+            'page_size': page_size,
+            'has_next': page_obj.has_next(),
+            'has_previous': page_obj.has_previous()
+        }
+        
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        errors['server'] = [str(e)]
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['POST'])
@@ -211,11 +245,8 @@ def check_proxy_health_view(request):
     payload = {}
     errors = {}
     
-    user_id = request.data.get('user_id', '')
     proxy_id = request.data.get('proxy_id', '')
     
-    if not user_id:
-        errors['user_id'] = ['User ID is required.']
     if not proxy_id:
         errors['proxy_id'] = ['Proxy ID is required.']
     
@@ -225,22 +256,16 @@ def check_proxy_health_view(request):
         return Response(payload, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        user = User.objects.get(user_id=user_id)
-        proxy = ProxyServer.objects.get(id=proxy_id, user=user)
-        
-        rotation_service = ProxyRotationService(user)
-        is_healthy = rotation_service.check_proxy_health(proxy)
-        
+        proxy = ProxyServer.objects.get(id=proxy_id, user=request.user, is_archived=False)
+
+        rotation_service = ProxyRotationService(request.user)
+        rotation_service.check_proxy_health(proxy)
+
+        serializer = ProxyServerSerializer(proxy)
         payload['message'] = 'Successful'
-        payload['data'] = {
-            'proxy_id': proxy.id,
-            'is_healthy': is_healthy,
-            'health_check_failures': proxy.health_check_failures
-        }
+        payload['data'] = serializer.data
         return Response(payload, status=status.HTTP_200_OK)
-        
-    except User.DoesNotExist:
-        errors['user_id'] = ['User does not exist.']
+
     except ProxyServer.DoesNotExist:
         errors['proxy_id'] = ['Proxy does not exist.']
     
@@ -256,29 +281,19 @@ def check_all_proxies_health_view(request):
     """Check health of all user's proxies"""
     payload = {}
     errors = {}
-    
-    user_id = request.data.get('user_id', '')
-    
-    if not user_id:
-        errors['user_id'] = ['User ID is required.']
-        payload['message'] = 'Errors'
-        payload['errors'] = errors
-        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
-    
-    try:
-        user = User.objects.get(user_id=user_id)
-        rotation_service = ProxyRotationService(user)
-        results = rotation_service.check_all_proxies_health()
-        
-        payload['message'] = 'Successful'
-        payload['data'] = {'health_checks': results}
-        return Response(payload, status=status.HTTP_200_OK)
-        
-    except User.DoesNotExist:
-        errors['user_id'] = ['User does not exist.']
-        payload['message'] = 'Errors'
-        payload['errors'] = errors
-        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+    rotation_service = ProxyRotationService(request.user)
+    results = rotation_service.check_all_proxies_health()
+
+    proxies = ProxyServer.objects.filter(user=request.user, is_archived=False).order_by('-created_at')
+    serializer = ProxyServerSerializer(proxies, many=True)
+
+    payload['message'] = 'Successful'
+    payload['data'] = {
+        'health_checks': results,
+        'proxies': serializer.data
+    }
+    return Response(payload, status=status.HTTP_200_OK)
 
 
 @api_view(['GET'])
@@ -311,6 +326,134 @@ def get_proxy_rotation_stats_view(request):
         payload['message'] = 'Errors'
         payload['errors'] = errors
         return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def download_and_test_proxies_view(request):
+    """Download proxies from GeoNode and test their health in background"""
+    payload = {}
+    errors = {}
+    
+    protocols = request.data.get('protocols', ['http', 'socks5'])
+    limit = request.data.get('limit', 500)
+    
+    # Validate protocols
+    valid_protocols = ['http', 'socks4', 'socks5']
+    if isinstance(protocols, str):
+        protocols = [protocols]
+    
+    for protocol in protocols:
+        if protocol not in valid_protocols:
+            errors['protocols'] = [f'Invalid protocol: {protocol}. Valid options: {valid_protocols}']
+    
+    # Validate limit
+    try:
+        limit = int(limit)
+        if limit <= 0 or limit > 1000:
+            errors['limit'] = ['Limit must be between 1 and 1000']
+    except (TypeError, ValueError):
+        errors['limit'] = ['Limit must be a valid integer']
+    
+    if errors:
+        payload['message'] = 'Errors'
+        payload['errors'] = errors
+        return Response(payload, status=status.HTTP_400_BAD_REQUEST)
+    
+    try:
+        # Start background task
+        task = download_and_test_proxies_task.delay(
+            user_id=request.user.id,
+            protocols=protocols,
+            limit=limit
+        )
+        
+        payload['message'] = 'Download task started'
+        payload['data'] = {
+            'task_id': task.id,
+            'status': 'PENDING',
+            'protocols': protocols,
+            'limit': limit
+        }
+        return Response(payload, status=status.HTTP_202_ACCEPTED)
+        
+    except Exception as e:
+        payload['message'] = 'Error'
+        payload['errors'] = {'server': [str(e)]}
+        return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def get_proxy_download_status_view(request, task_id):
+    """Get status of proxy download task"""
+    payload = {}
+    errors = {}
+    
+    try:
+        task = AsyncResult(task_id)
+        
+        if task.state == 'PENDING':
+            response_data = {
+                'task_id': task_id,
+                'status': 'PENDING',
+                'message': 'Task is waiting to be processed'
+            }
+        elif task.state == 'PROGRESS':
+            response_data = task.info
+            response_data['task_id'] = task_id
+            response_data['status'] = 'PROGRESS'
+        elif task.state == 'SUCCESS':
+            response_data = task.result
+            response_data['task_id'] = task_id
+            response_data['status'] = 'SUCCESS'
+        elif task.state == 'FAILURE':
+            response_data = {
+                'task_id': task_id,
+                'status': 'FAILURE',
+                'message': str(task.info)
+            }
+        else:
+            response_data = {
+                'task_id': task_id,
+                'status': task.state,
+                'message': 'Unknown status'
+            }
+        
+        payload['message'] = 'Successful'
+        payload['data'] = response_data
+        return Response(payload, status=status.HTTP_200_OK)
+        
+    except Exception as e:
+        payload['message'] = 'Error'
+        payload['errors'] = {'server': [str(e)]}
+        return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+@authentication_classes([TokenAuthentication])
+def cleanup_unhealthy_proxies_view(request):
+    """Clean up unhealthy proxies in background"""
+    payload = {}
+    
+    try:
+        # Start background task
+        task = cleanup_unhealthy_proxies_task.delay(user_id=request.user.id)
+        
+        payload['message'] = 'Cleanup task started'
+        payload['data'] = {
+            'task_id': task.id,
+            'status': 'PENDING'
+        }
+        return Response(payload, status=status.HTTP_202_ACCEPTED)
+        
+    except Exception as e:
+        payload['message'] = 'Error'
+        payload['errors'] = {'server': [str(e)]}
+        return Response(payload, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(['GET', 'POST'])

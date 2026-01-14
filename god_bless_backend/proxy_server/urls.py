@@ -21,6 +21,11 @@ urlpatterns = [
     path('health/check/', views.check_proxy_health_view, name='check_proxy_health'),
     path('health/check-all/', views.check_all_proxies_health_view, name='check_all_proxies_health'),
     
+    # Proxy downloading and testing
+    path('download/', views.download_and_test_proxies_view, name='download_and_test_proxies'),
+    path('download/status/<str:task_id>/', views.get_proxy_download_status_view, name='get_proxy_download_status'),
+    path('cleanup/', views.cleanup_unhealthy_proxies_view, name='cleanup_unhealthy_proxies'),
+    
     # Rotation stats and settings
     path('rotation/stats/', views.get_proxy_rotation_stats_view, name='proxy_rotation_stats'),
     path('rotation/settings/', views.rotation_settings_view, name='rotation_settings'),
